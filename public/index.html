@@ -4,19 +4,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Food Cost</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23b4482b'/%3E%3Ctext x='32' y='43' font-family='Georgia,serif' font-size='30' font-weight='700' fill='white' text-anchor='middle'%3EFC%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231e3a6d'/%3E%3Ctext x='32' y='43' font-family='Arial,sans-serif' font-size='30' font-weight='700' fill='white' text-anchor='middle'%3EFC%3C/text%3E%3C/svg%3E">
 <style>
 :root{--q1:#18764a;--q2:#d98b16;--q3:#3c6ebe;--q4:#c0392b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
---bg:#f6f4ef;--card:#ffffff;--ink:#1f2421;--mut:#6b726d;--line:#e3e0d6;--acc:#b4482b;--acc-ink:#fff;--ok:#2f6b4f;--warn:#b7791f;--bad:#b3261e;--chip:#efece3}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--q1:#257d4f;--q2:#b8843a;--q3:#6090dc;--q4:#de625b;--bg:#171a18;--card:#212523;--ink:#ecebe6;--mut:#9aa19c;--line:#353a37;--acc:#e0704f;--acc-ink:#1a1a1a;--ok:#5fb28a;--warn:#e0b050;--bad:#f2857d;--chip:#2b302d}}
-:root[data-theme="dark"]{--q1:#257d4f;--q2:#b8843a;--q3:#6090dc;--q4:#de625b;--bg:#171a18;--card:#212523;--ink:#ecebe6;--mut:#9aa19c;--line:#353a37;--acc:#e0704f;--acc-ink:#1a1a1a;--ok:#5fb28a;--warn:#e0b050;--bad:#f2857d;--chip:#2b302d}
+--brand:#1e3a6d;--brand-ink:#ffffff;--brand-soft:#b6c7ea;
+--bg:#f3f5f9;--card:#ffffff;--ink:#1c2433;--mut:#5d6778;--line:#dde3ec;--acc:#c8176f;--acc-ink:#fff;--ok:#2f6b4f;--warn:#b7791f;--bad:#b3261e;--chip:#eaeef5;
+--f-head:"Montserrat",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;--f-body:"Inter",-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--q1:#257d4f;--q2:#b8843a;--q3:#6090dc;--q4:#de625b;--brand:#1e3a6d;--brand-soft:#b6c7ea;--bg:#161d2b;--card:#1d2638;--ink:#e8ecf4;--mut:#9aa6bb;--line:#2e3a52;--acc:#f06aa8;--acc-ink:#1a1020;--ok:#5fb28a;--warn:#e0b050;--bad:#f2857d;--chip:#26314a}}
+:root[data-theme="dark"]{--q1:#257d4f;--q2:#b8843a;--q3:#6090dc;--q4:#de625b;--brand:#1e3a6d;--brand-soft:#b6c7ea;--bg:#161d2b;--card:#1d2638;--ink:#e8ecf4;--mut:#9aa6bb;--line:#2e3a52;--acc:#f06aa8;--acc-ink:#1a1020;--ok:#5fb28a;--warn:#e0b050;--bad:#f2857d;--chip:#26314a}
 html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;min-height:100%;padding-bottom:84px}
-h1,h2{font-family:Georgia,"Times New Roman",serif;margin:0}
-header{padding:18px 16px 8px;max-width:760px;margin:0 auto}
-header h1{font-size:24px}
-header p{margin:2px 0 0;color:var(--mut);font-size:13px}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--f-body);font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased;min-height:100%;padding-bottom:84px}
+h1,h2{font-family:var(--f-head);font-weight:700;margin:0;letter-spacing:-.01em}
+header{background:var(--brand);color:var(--brand-ink);padding:14px max(16px,calc((100% - 1200px)/2)) 12px;border-bottom:3px solid var(--acc)}
+header h1{font-size:22px;font-weight:800;letter-spacing:.01em}
+header h1 span{color:var(--brand-soft);font-weight:600}
+header p{margin:2px 0 0;color:var(--brand-soft);font-size:13px}
 main{max-width:760px;margin:0 auto;padding:8px 16px 24px}
 .bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
 .bar input,.bar select{flex:1;min-width:120px}
@@ -40,7 +45,7 @@ button.sm{min-height:34px;padding:6px 10px;font-size:13px}
 nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px);z-index:5}
 nav .in{display:flex;width:100%;max-width:760px}
 nav button{flex:1;background:none;border-radius:0;padding:12px 4px;font-size:13px;color:var(--mut);min-height:54px}
-nav button.on{color:var(--acc);font-weight:700}
+nav button.on{color:var(--acc);font-weight:700;box-shadow:inset 0 3px 0 var(--acc)}
 .sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10;display:flex;align-items:flex-end;justify-content:center}
 .sheet{background:var(--bg);width:100%;max-width:760px;max-height:92%;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px))}
 .sheet h2{font-size:20px;margin-bottom:12px}
@@ -67,7 +72,7 @@ textarea{min-height:110px;font-family:ui-monospace,Menlo,monospace;font-size:12p
 .soon{font-size:13px;color:var(--mut);margin-top:16px}
 
 nav button{font-size:12px}
-.gh{font-size:15px;margin:18px 0 8px;color:var(--acc);letter-spacing:.05em}
+.gh{font-size:14px;margin:22px 0 8px;color:var(--brand);letter-spacing:.06em;text-transform:uppercase;border-left:4px solid var(--acc);padding-left:8px}
 .kgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
 .kgrid label{margin:0}
 .kv{background:var(--chip);border-radius:10px;padding:6px 8px;font-size:12px;color:var(--mut)}
@@ -86,8 +91,10 @@ details.lg p{margin:6px 0 0}
 /* multi-cliente */
 .topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 #top{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
-#top select{width:auto;max-width:230px;min-height:34px;padding:4px 8px;font-size:13px}
-.role{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--chip);color:var(--mut);font-weight:600}
+#top select{width:auto;max-width:260px;min-height:34px;padding:4px 8px;font-size:13px;background:#fff;color:#1c2433;border-color:transparent}
+#top button{background:rgba(255,255,255,.14);color:#fff}
+#top button:hover{background:rgba(255,255,255,.24)}
+.role{font-size:11px;padding:3px 9px;border-radius:99px;background:var(--acc);color:#fff;font-weight:700;letter-spacing:.03em;text-transform:uppercase}
 body:not(.authed) nav{display:none}
 .auth{max-width:420px;margin:24px auto 0}
 .auth h2{font-size:20px;margin-bottom:12px}
@@ -125,13 +132,48 @@ details.tc summary::-webkit-details-marker{display:none}
 .qleg span{display:inline-flex;align-items:center;gap:5px}
 .qleg i{width:10px;height:10px;border-radius:50%;display:inline-block}
 .qnote{font-size:12px;color:var(--mut);padding:6px 0 10px}
+.thead{display:none}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .gh{color:var(--brand-soft)}}
+:root[data-theme="dark"] .gh{color:var(--brand-soft)}
+/* ---------- computer ---------- */
+@media (min-width:1000px){
+  body{padding-bottom:0}
+  main{max-width:1200px;padding:18px 24px 40px}
+  nav{position:sticky;top:0;bottom:auto;border-top:0;border-bottom:1px solid var(--line);box-shadow:0 1px 6px rgba(20,30,60,.06)}
+  nav .in{max-width:1200px;padding:0 24px}
+  nav button{flex:0 0 auto;padding:14px 18px;font-size:14px;min-height:50px}
+  nav button.on{box-shadow:inset 0 -3px 0 var(--acc)}
+  #flist,#rlist{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  #flist .card,#rlist .card{margin:0}
+  .sheet-bg{align-items:center}
+  .sheet{border-radius:18px;max-width:680px;max-height:88%}
+  .auth{margin-top:48px}
+  /* tabelle di Marginalità e Menu engineering */
+  .thead{display:grid;font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;font-weight:600;padding:4px 0 8px;border-bottom:1px solid var(--line);gap:8px}
+  .mt .mrow{display:grid;align-items:center;gap:8px;padding:6px 0}
+  .mt .kgrid{margin:0;gap:8px}
+  .mt .kl{display:none}
+  .mt .kv{background:none;padding:0;display:flex;justify-content:flex-end;align-items:center;min-height:36px}
+  .mt .kv b{font-size:14px}
+  .mt label{margin:0}
+  .mt label input{margin:0;min-height:36px;padding:6px 8px;text-align:right}
+  .mt.m6 .thead,.mt.m6 .mrow{grid-template-columns:minmax(200px,1.4fr) 6fr}
+  .mt.m6 .kgrid,.mt.m6 .thead>div{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+  .mt.m9 .thead,.mt.m9 .mrow{grid-template-columns:minmax(220px,1.5fr) 9fr}
+  .mt.m9 .kgrid,.mt.m9 .thead>div{display:grid;grid-template-columns:repeat(9,1fr);gap:8px}
+  .thead>div span{text-align:right}
+  .mt .mname b{font-size:14px}
+  .qchart{max-width:560px}
+  /* editor ricetta su due colonne */
+  .redit{display:grid;grid-template-columns:1fr 380px;gap:24px;align-items:start}
+  .redit .rright{position:sticky;top:70px}
+  .redit .tot{margin-top:0}
+  .adm .tc{margin-bottom:8px}
+}
 </style>
 </head>
 <body>
-<header><div class="topbar"><h1>Food Cost</h1><div id="top"></div></div><p id="sub"></p></header>
-<main id="app"></main>
-<div id="sheet"></div>
-<div id="toast"></div>
+<header><div class="topbar"><h1>Food Cost <span>· OSM</span></h1><div id="top"></div></div><p id="sub"></p></header>
 <nav><div class="in">
   <button data-tab="alimenti">Alimenti</button>
   <button data-tab="ricette">Ricette</button>
@@ -140,6 +182,10 @@ details.tc summary::-webkit-details-marker{display:none}
   <button data-tab="dati">Dati</button>
   <button data-tab="clienti" id="nav-clienti" hidden>Clienti</button>
 </div></nav>
+<main id="app"></main>
+<div id="sheet"></div>
+<div id="toast"></div>
+
 
 <script>
 /* ---------- stato: i dati arrivano dal server (nessun salvataggio nel browser) ---------- */
@@ -205,6 +251,7 @@ function clone(o){return JSON.parse(JSON.stringify(o))}
 function uid(){return Math.random().toString(36).slice(2,9)}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function num(v){var n=parseFloat(String(v).replace(',','.'));return isNaN(n)?0:n}
+function eurp(n){return eur(n,Math.abs(n)<0.1&&n!==0?4:2)}
 function eur(n,d){if(n==null||isNaN(n))return '—';return n.toLocaleString('it-IT',{style:'currency',currency:'EUR',minimumFractionDigits:d==null?2:d,maximumFractionDigits:d==null?2:d})}
 function today(){return new Date().toISOString().slice(0,10)}
 function dIt(s){var p=String(s).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:s}
@@ -335,7 +382,7 @@ function foodsList(){
   return list.map(function(f){
     var ui=unitInfo(f);
     return'<div class="card item" data-act="editfood" data-id="'+f.id+'"><div><b>'+esc(f.name)+'</b><span class="mut">'+esc(f.category||'Senza reparto')+(f.supplier?' · '+esc(f.supplier):'')+'</span></div>'
-    +'<div class="right">'+(ui?'<b>'+eur(ui.disp)+ui.label+'</b><span class="mut">prezzo '+MODES[f.mode||'max'].toLowerCase()+'</span>':'<span class="warn">senza prezzo</span>')+'</div></div>';
+    +'<div class="right">'+(ui?'<b>'+eurp(ui.disp)+ui.label+'</b><span class="mut">prezzo '+MODES[f.mode||'max'].toLowerCase()+'</span>':'<span class="warn">senza prezzo</span>')+'</div></div>';
   }).join('');
 }
 function keepFocus(id,fn){var el=document.getElementById('flist')||document.getElementById('rlist');if(el)el.innerHTML=fn()}
@@ -357,7 +404,7 @@ function foodSheetHTML(){
   +'<div class="grid3"><label>Data<input type="date" id="np-d" value="'+today()+'"></label><label>Prezzo €<input id="np-p" type="number" inputmode="decimal" step="0.01" placeholder="0,00"></label><button class="pri" style="margin-bottom:10px" data-act="addprice">Aggiungi</button></div>'
   +(st?'<div class="stats"><div>Minimo<b>'+eur(st.min)+'</b></div><div>Medio<b>'+eur(st.avg)+'</b></div><div>Massimo<b>'+eur(st.max)+'</b></div><div>Ultimo<b>'+eur(st.last)+'</b></div></div>':'<p class="mut">Nessun prezzo inserito.</p>')
   +hist.map(function(h){return'<div class="hist"><span>'+dIt(h.date)+'</span><span><b>'+eur(h.price)+'</b> <button class="sm del" data-act="delprice" data-id="'+h.id+'">✕</button></span></div>'}).join('')
-  +(ui?'<p class="ok" style="margin:12px 0 0"><b>Costo usato nelle ricette: '+eur(ui.disp)+ui.label+'</b></p>':(f.unit==='conf'&&stats(f)?'<p class="warn">Indica la quantità della confezione.</p>':''))
+  +(ui?'<p class="ok" style="margin:12px 0 0"><b>Costo usato nelle ricette: '+eurp(ui.disp)+ui.label+'</b></p>':(f.unit==='conf'&&stats(f)?'<p class="warn">Indica la quantità della confezione.</p>':''))
   +'<p id="ferr" class="bad" style="margin:8px 0 0"></p>'
   +'<div class="acts"><button class="pri" data-act="savefood">Salva</button><button data-act="closefood">'+(RO?'Chiudi':'Annulla')+'</button>'+(f.isNew?'':'<button class="del" data-act="delfood">Elimina</button>')+'</div></div></div>';
 }
@@ -386,7 +433,7 @@ function recipesList(){
 }
 function recipeEditorHTML(){
   var r=route.recipe;
-  return'<div class="bar"><button data-act="backrecipe">← Ricette</button></div>'
+  return'<div class="bar"><button data-act="backrecipe">← Ricette</button></div><div class="redit"><div class="rleft">'
   +'<label>Nome piatto *<input value="'+esc(r.name)+'" oninput="route.recipe.name=this.value" placeholder="es. Calzone"></label>'
   +'<div class="grid2"><label>Tipologia<select onchange="route.recipe.type=this.value"><option value="">—</option>'+S.lists.tipologie.map(function(c){return'<option'+(r.type===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select></label>'
   +'<label>Dosi (porzioni della ricetta)<input type="number" inputmode="decimal" value="'+esc(r.portions)+'" oninput="route.recipe.portions=this.value;recalc()"></label></div>'
@@ -396,14 +443,14 @@ function recipeEditorHTML(){
   +'<datalist id="foodlist">'+S.foods.map(function(f){return'<option value="'+esc(f.name)+'">'}).join('')
     +S.recipes.filter(function(x){return x.id!==r.id}).map(function(x){return'<option value="'+esc(x.name)+' (ricetta)">'}).join('')+'</datalist>'
   +r.rows.map(function(row,i){return rowHTML(row,i)}).join('')
-  +'<button data-act="addrow" style="width:100%">+ Aggiungi ingrediente</button>'
+  +'<button data-act="addrow" style="width:100%">+ Aggiungi ingrediente</button></div><div class="rright">'
   +'<div class="tot"><div class="r"><span>Costo totale ricetta</span><b id="t-tot"></b></div><div class="r"><span>Costo per dose</span><b class="big" id="t-dose"></b></div><div class="r" id="t-kgr"><span>Costo al kg (dalla resa)</span><b id="t-kg"></b></div>'
   +'<div id="t-warn" class="warn" style="font-size:13px"></div>'
   +'<hr style="border:0;border-top:1px solid var(--line);margin:10px 0">'
   +'<label style="margin:0">Prezzo di vendita IVA inclusa (facoltativo)<input type="number" inputmode="decimal" step="0.01" value="'+esc(r.price||'')+'" oninput="route.recipe.price=this.value;recalc()"></label>'
   +'<div class="r" style="margin-top:8px"><span>Food cost %</span><b id="t-fc"></b></div><div class="r"><span>Margine (IVA esclusa)</span><b id="t-mg"></b></div></div>'
   +'<div id="rerr" class="lockmsg"></div>'
-  +'<div class="acts"><button class="pri" data-act="saverecipe">Salva ricetta</button>'+(r.isNew?'':'<button data-act="dupl"'+(lockRecipe()?' class="locked"':'')+'>Duplica</button><button class="del" data-act="delrecipe">Elimina</button>')+'</div>';
+  +'<div class="acts"><button class="pri" data-act="saverecipe">Salva ricetta</button>'+(r.isNew?'':'<button data-act="dupl"'+(lockRecipe()?' class="locked"':'')+'>Duplica</button><button class="del" data-act="delrecipe">Elimina</button>')+'</div></div></div>';
 }
 function rowHTML(row,i){
   var ui=rowInfo(row,[route.recipe.id]),u=ui?BASEU[ui.basis]:'g';
@@ -429,7 +476,7 @@ function recalc(){
       if(!row.name)me.textContent='';
       else if(!f)me.innerHTML='<span class="warn">'+(row.subId?'Ricetta non trovata':'Alimento o ricetta non trovato')+'</span>';
       else if(!ui)me.innerHTML='<span class="warn">'+(row.subId?'Ricetta senza costo (o usata in un ciclo)':'Alimento senza prezzo valido')+'</span>';
-      else me.textContent=(row.subId?'Ricetta · costo ':'Costo base ')+eur(ui.disp)+ui.label;
+      else me.textContent=(row.subId?'Ricetta · costo ':'Costo base ')+eurp(ui.disp)+ui.label;
     }
   });
   var t=recipeTotal(r),d=num(r.portions)>0?num(r.portions):1,dose=t.total/d;
@@ -470,11 +517,11 @@ function margHTML(){
   if(!S.recipes.length)return'<div class="empty">Nessuna ricetta.<br>Creale nella sezione Ricette.</div>';
   return'<p class="mut" style="margin:0 0 6px">Inserisci il prezzo di vendita IVA inclusa: food cost e margini si calcolano da soli. Il food cost è verde fino al '+S.fcTarget+'%, arancione fino a +5 punti, poi rosso.</p>'
   +groups().map(function(g,gi){
-    return'<h2 class="gh">'+esc(g.t)+'</h2><div class="card">'+g.rs.map(function(r){
-      return'<div class="mrow"><div class="mh"><b>'+esc(r.name)+'</b><span class="mut warn" id="mw-'+r.id+'"></span></div>'
-      +'<div class="kgrid"><label>Prezzo IVA incl. €<input type="number" inputmode="decimal" step="0.01" value="'+esc(r.price||'')+'" oninput="setPrice(\''+r.id+'\',this.value)"></label>'
-      +'<div class="kv">Prezzo IVA escl.<b id="mn-'+r.id+'"></b></div><div class="kv">Food cost dose<b id="mf-'+r.id+'"></b></div>'
-      +'<div class="kv">Food cost %<b id="mp-'+r.id+'"></b></div><div class="kv">Margine €<b id="mg-'+r.id+'"></b></div><div class="kv">Margine %<b id="mq-'+r.id+'"></b></div></div></div>';
+    return'<h2 class="gh">'+esc(g.t)+'</h2><div class="card mt m6"><div class="thead"><span>Piatto</span><div><span>Prezzo IVA incl.</span><span>IVA escl.</span><span>Food cost dose</span><span>Food cost %</span><span>Margine €</span><span>Margine %</span></div></div>'+g.rs.map(function(r){
+      return'<div class="mrow"><div class="mname"><div class="mh"><b>'+esc(r.name)+'</b><span class="mut warn" id="mw-'+r.id+'"></span></div></div>'
+      +'<div class="kgrid"><label><span class="kl">Prezzo IVA incl. €</span><input type="number" inputmode="decimal" step="0.01" value="'+esc(r.price||'')+'" oninput="setPrice(\''+r.id+'\',this.value)"></label>'
+      +'<div class="kv"><span class="kl">Prezzo IVA escl.</span><b id="mn-'+r.id+'"></b></div><div class="kv"><span class="kl">Food cost dose</span><b id="mf-'+r.id+'"></b></div>'
+      +'<div class="kv"><span class="kl">Food cost %</span><b id="mp-'+r.id+'"></b></div><div class="kv"><span class="kl">Margine €</span><b id="mg-'+r.id+'"></b></div><div class="kv"><span class="kl">Margine %</span><b id="mq-'+r.id+'"></b></div></div></div>';
     }).join('')+'<div class="avg" id="ma-'+gi+'"></div></div>';
   }).join('');
 }
@@ -507,13 +554,13 @@ function menuHTML(){
   return'<details class="lg"><summary>Come si legge</summary><p>Ogni piatto è confrontato con la <b>media della sua categoria</b> su tre aspetti: vendite (popolarità), margine in € (profittabilità) e tempo di preparazione. Il prezzo si inserisce in Marginalità.</p>'
   +'<p><b>Fuoriclasse</b>: vende e rende sopra media. <b>Instancabili</b>: vende molto, rende poco. <b>Diamanti grezzi</b>: rende ma vende poco. <b>Rami secchi</b>: né l’uno né l’altro. “Veloci” = tempo sotto la media della categoria.</p><p>Nel <b>grafico</b> ogni puntino è un piatto: più è a destra più guadagni per piatto, più è in alto più ne vendi. Le linee tratteggiate sono le medie della categoria.</p></details>'
   +groups().map(function(g,gi){
-    return'<h2 class="gh">'+esc(g.t)+'</h2><div class="card"><div class="qchart" id="qc-'+gi+'"></div>'+g.rs.map(function(r){
-      return'<div class="mrow"><div class="mh"><b>'+esc(r.name)+'</b><span class="badge" id="bd-'+r.id+'"></span></div><div class="mut" id="bh-'+r.id+'" style="margin-top:2px"></div>'
-      +'<div class="kgrid"><label>Venduto (n.)<input type="number" inputmode="numeric" value="'+esc(r.sold||'')+'" oninput="setMenu(\''+r.id+'\',\'sold\',this.value)"></label>'
-      +'<label>Tempo prep.+serv. (min)<input type="number" inputmode="decimal" value="'+esc(r.time||'')+'" oninput="setMenu(\''+r.id+'\',\'time\',this.value)"></label>'
-      +'<div class="kv">Margine € (netto)<b id="xg-'+r.id+'"></b></div>'
-      +'<div class="kv">Margine %<b id="xq-'+r.id+'"></b></div><div class="kv">Moltiplicatore<b id="xm-'+r.id+'"></b></div><div class="kv">Incasso totale<b id="xi-'+r.id+'"></b></div>'
-      +'<div class="kv">Food cost tot.<b id="xf-'+r.id+'"></b></div><div class="kv">Margine tot.<b id="xt-'+r.id+'"></b></div><div class="kv">% margine categ.<b id="xs-'+r.id+'"></b></div></div></div>';
+    return'<h2 class="gh">'+esc(g.t)+'</h2><div class="card mt m9"><div class="qchart" id="qc-'+gi+'"></div><div class="thead"><span>Piatto</span><div><span>Venduto</span><span>Tempo min</span><span>Margine €</span><span>Margine %</span><span>Moltipl.</span><span>Incasso</span><span>Food cost tot.</span><span>Margine tot.</span><span>% su categ.</span></div></div>'+g.rs.map(function(r){
+      return'<div class="mrow"><div class="mname"><div class="mh"><b>'+esc(r.name)+'</b><span class="badge" id="bd-'+r.id+'"></span></div><div class="mut" id="bh-'+r.id+'" style="margin-top:2px"></div></div>'
+      +'<div class="kgrid"><label><span class="kl">Venduto (n.)</span><input type="number" inputmode="numeric" value="'+esc(r.sold||'')+'" oninput="setMenu(\''+r.id+'\',\'sold\',this.value)"></label>'
+      +'<label><span class="kl">Tempo prep.+serv. (min)</span><input type="number" inputmode="decimal" value="'+esc(r.time||'')+'" oninput="setMenu(\''+r.id+'\',\'time\',this.value)"></label>'
+      +'<div class="kv"><span class="kl">Margine € (netto)</span><b id="xg-'+r.id+'"></b></div>'
+      +'<div class="kv"><span class="kl">Margine %</span><b id="xq-'+r.id+'"></b></div><div class="kv"><span class="kl">Moltiplicatore</span><b id="xm-'+r.id+'"></b></div><div class="kv"><span class="kl">Incasso totale</span><b id="xi-'+r.id+'"></b></div>'
+      +'<div class="kv"><span class="kl">Food cost tot.</span><b id="xf-'+r.id+'"></b></div><div class="kv"><span class="kl">Margine tot.</span><b id="xt-'+r.id+'"></b></div><div class="kv"><span class="kl">% margine categ.</span><b id="xs-'+r.id+'"></b></div></div></div>';
     }).join('')+'<div class="avg" id="xa-'+gi+'"></div></div>';
   }).join('');
 }
