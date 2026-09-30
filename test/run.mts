@@ -267,6 +267,19 @@ const pz = r.data.recipes.find((x: any) => x.id === piz);
 ok(pz.rows[0].subId === imp && pz.rows[0].qty === 200, "la riga salvata punta alla sotto-ricetta");
 
 /* ------------------------------------------------------------------ */
+section("Cambio massivo del prezzo da usare");
+{
+  const fA2 = (await A.post("/foods", { ...food("secondo A"), history: [{ date: "2026-01-01", price: 2 }, { date: "2026-02-01", price: 8 }] })).data.id;
+  r = await A.patch("/foods", { mode: "min", ids: [fA, fA2, fB] });
+  ok(r.status === 200 && r.data.updated === 2, "A cambia il prezzo da usare dei suoi alimenti (quello di B ignorato)");
+  const dA = (await A.get("/data")).data;
+  ok(dA.foods.filter((x: any) => [fA, fA2].includes(x.id)).every((x: any) => x.mode === "min"), "i due alimenti di A ora usano il prezzo minimo");
+  const dB = (await B.get("/data")).data;
+  ok(dB.foods.find((x: any) => x.id === fB).mode === "max", "l'alimento di B non è cambiato");
+  ok((await A.patch("/foods", { mode: "boh", ids: [fA] })).status === 400, "prezzo da usare non valido → 400");
+  ok((await V.patch("/foods", { mode: "avg", ids: [fA] })).status === 403, "il viewer non può fare il cambio massivo");
+}
+
 section("Dati di test, importazione, varie");
 r = await max.post("/admin/tenants", { ragione: "Demo", tipo: "Pizzeria", demo: true });
 const demo = r.data.id;

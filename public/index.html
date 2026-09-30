@@ -322,7 +322,7 @@ function render(){
   else if(route.tab==='marginalita')app.innerHTML=margHTML();
   else if(route.tab==='menu')app.innerHTML=menuHTML();
   else app.innerHTML=datiHTML();
-  document.getElementById('sheet').innerHTML=route.pw?pwSheetHTML():(route.food&&S?foodSheetHTML():'');
+  document.getElementById('sheet').innerHTML=route.pw?pwSheetHTML():(route.bulk&&S?bulkSheetHTML():(route.food&&S?foodSheetHTML():''));
   if(!S||route.tab==='clienti'){}
   else if(route.recipe)recalc();
   else if(route.tab==='marginalita')paintMarg();
@@ -330,7 +330,7 @@ function render(){
   applyRO();
 }
 /* sola lettura: nasconde i pulsanti di modifica e blocca i campi (il server rifiuta comunque ogni scrittura) */
-var WRITE=['newfood','savefood','delfood','addprice','delprice','newrecipe','saverecipe','dupl','delrecipe','addrow','delrow','addlist','dellist'];
+var WRITE=['bulkmode','newfood','savefood','delfood','addprice','delprice','newrecipe','saverecipe','dupl','delrecipe','addrow','delrow','addlist','dellist'];
 function applyRO(){
   if(!RO||!S||route.tab==='clienti')return;
   ['app'].concat(route.food&&!route.pw?['sheet']:[]).forEach(function(id){
@@ -363,20 +363,21 @@ function lockRecipe(){
 function showLock(m){var e=document.getElementById('lockmsg');if(e){e.textContent=m;e.scrollIntoView({block:'nearest'})}else toast(m)}
 
 /* ---------- ALIMENTI ---------- */
-function foodsHTML(){
+function visibleFoods(){
   var q=route.q.toLowerCase();
-  var list=S.foods.filter(function(f){return(!q||f.name.toLowerCase().indexOf(q)>=0||(f.supplier||'').toLowerCase().indexOf(q)>=0)&&(!route.cat||f.category===route.cat)})
+  return S.foods.filter(function(f){return(!q||f.name.toLowerCase().indexOf(q)>=0||(f.supplier||'').toLowerCase().indexOf(q)>=0)&&(!route.cat||f.category===route.cat)})
     .sort(function(a,b){return a.name.localeCompare(b.name,'it')});
+}
+function foodsHTML(){
   var lk=lockFood();
   var h='<div class="bar"><input id="q" data-keep placeholder="Cerca alimento o fornitore" value="'+esc(route.q)+'" oninput="route.q=this.value;keepFocus(\'q\',foodsList)">'
    +'<select data-keep onchange="route.cat=this.value;render()"><option value="">Tutti i reparti</option>'+S.lists.reparti.map(function(c){return'<option'+(route.cat===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select>'
+   +'<button data-act="bulkmode" title="Cambia il prezzo da usare di tutti gli alimenti in elenco">Prezzo da usare…</button>'
    +'<button class="pri'+(lk?' locked':'')+'" data-act="newfood">+ Alimento</button></div><div id="lockmsg" class="lockmsg"></div><div id="flist">'+foodsList()+'</div>';
   return h;
 }
 function foodsList(){
-  var q=route.q.toLowerCase();
-  var list=S.foods.filter(function(f){return(!q||f.name.toLowerCase().indexOf(q)>=0||(f.supplier||'').toLowerCase().indexOf(q)>=0)&&(!route.cat||f.category===route.cat)})
-    .sort(function(a,b){return a.name.localeCompare(b.name,'it')});
+  var list=visibleFoods();
   if(!S.foods.length)return'<div class="empty">Nessun alimento.'+(RO?'':'<br>Tocca “+ Alimento” per inserire il primo.')+'</div>';
   if(!list.length)return'<div class="empty">Nessun risultato.</div>';
   return list.map(function(f){
@@ -384,6 +385,29 @@ function foodsList(){
     return'<div class="card item" data-act="editfood" data-id="'+f.id+'"><div><b>'+esc(f.name)+'</b><span class="mut">'+esc(f.category||'Senza reparto')+(f.supplier?' · '+esc(f.supplier):'')+'</span></div>'
     +'<div class="right">'+(ui?'<b>'+eurp(ui.disp)+ui.label+'</b><span class="mut">prezzo '+MODES[f.mode||'max'].toLowerCase()+'</span>':'<span class="warn">senza prezzo</span>')+'</div></div>';
   }).join('');
+}
+/* cambio massivo del prezzo da usare sugli alimenti visibili (filtri e ricerca attivi) */
+function bulkPreview(mode){
+  var list=visibleFoods(),ids={},changed=list.filter(function(f){return (f.mode||'max')!==mode});
+  changed.forEach(function(f){ids[f.id]=1});
+  var before=S.recipes.map(function(r){return recipeTotal(r).total});
+  var saved=changed.map(function(f){return f.mode});
+  changed.forEach(function(f){f.mode=mode});
+  var n=0,up=0,down=0;
+  S.recipes.forEach(function(r,i){var a=recipeTotal(r).total,d=a-before[i];if(Math.abs(d)>0.0005){n++;if(d>0)up++;else down++}});
+  changed.forEach(function(f,i){f.mode=saved[i]});
+  return{list:list,changed:changed,n:n,up:up,down:down};
+}
+function bulkSheetHTML(){
+  var b=route.bulk,pv=bulkPreview(b.mode),filt=route.cat||route.q;
+  return'<div class="sheet-bg" data-act="closebg"><div class="sheet"><h2>Prezzo da usare</h2>'
+  +'<p class="mut" style="margin:-4px 0 12px">Vale per '+(filt?'i <b>'+pv.list.length+' alimenti in elenco</b> (filtro'+(route.cat?' reparto “'+esc(route.cat)+'”':'')+(route.q?' ricerca “'+esc(route.q)+'”':'')+')':'<b>tutti i '+pv.list.length+' alimenti</b>')+'. Per cambiarne solo una parte, prima filtra l’elenco per reparto o cerca un fornitore.</p>'
+  +'<div class="chips" style="margin:0 0 12px">'+Object.keys(MODES).map(function(k){return'<button class="'+(b.mode===k?'pri':'')+'" data-act="bulkpick" data-m="'+k+'">'+MODES[k]+'</button>'}).join('')+'</div>'
+  +'<div class="tot" style="margin:0 0 6px"><div class="r"><span>Alimenti che cambiano</span><b>'+pv.changed.length+' su '+pv.list.length+'</b></div>'
+  +'<div class="r"><span>Ricette il cui food cost cambia</span><b>'+pv.n+'</b></div>'
+  +(pv.n?'<div class="mut" style="font-size:13px">'+pv.up+' aumentano · '+pv.down+' diminuiscono</div>':'')+'</div>'
+  +'<p id="berr" class="bad" style="margin:6px 0 0"></p>'
+  +'<div class="acts"><button class="pri" data-act="bulkapply"'+(pv.changed.length?'':' disabled')+'>Applica “'+MODES[b.mode]+'” a '+pv.changed.length+' alimenti</button><button data-act="bulkclose">Annulla</button></div></div></div>';
 }
 function keepFocus(id,fn){var el=document.getElementById('flist')||document.getElementById('rlist');if(el)el.innerHTML=fn()}
 
@@ -801,7 +825,7 @@ document.addEventListener('click',function(e){
   if(t.dataset.tab){route.tab=t.dataset.tab;route.recipe=null;route.food=null;route.cat='';route.q='';if(route.tab==='clienti'){ADM&&(ADM.msg='');ADM=null}render();window.scrollTo(0,0);return}
   var a=t.dataset.act,id=t.dataset.id;
   /* clic sullo sfondo scuro di una scheda: chiude solo se non si è cliccato dentro la scheda */
-  if(a==='closebg'){if(e.target!==t)return;if(route.pw){if(!route.pw.forced)route.pw=null}else route.food=null;render();return}
+  if(a==='closebg'){if(e.target!==t)return;if(route.pw){if(!route.pw.forced)route.pw=null}else{route.food=null;route.bulk=null}render();return}
   /* accesso e account */
   if(a==='goregister'){route.auth='register';route.authMsg='';renderAuth();return}
   if(a==='gologin'){route.auth='login';route.authMsg='';renderAuth();return}
@@ -835,6 +859,16 @@ document.addEventListener('click',function(e){
   if(!S)return;
   if(a==='newfood'){var lf=lockFood();if(lf){showLock(lf);return}route.food={id:uid(),isNew:true,name:'',category:'',supplier:'',unit:'kg',mode:'max',packQty:'',packUnit:'g',history:[]};render()}
   else if(a==='editfood'){route.food=clone(foodById(id));render()}
+  else if(a==='bulkmode'){if(RO)return;var vf=visibleFoods();if(!vf.length){toast('Nessun alimento in elenco.');return}
+    route.bulk={mode:vf.every(function(f){return f.mode==='avg'})?'max':'avg'};render()}
+  else if(a==='bulkpick'){route.bulk.mode=t.dataset.m;render()}
+  else if(a==='bulkclose'){route.bulk=null;render()}
+  else if(a==='bulkapply'){
+    var pv=bulkPreview(route.bulk.mode),md=route.bulk.mode;
+    busy(t,api('PATCH','/foods',{mode:md,ids:pv.changed.map(function(f){return f.id})})).then(function(d){
+      route.bulk=null;return reload().then(function(){toast('Prezzo “'+MODES[md].toLowerCase()+'” applicato a '+d.updated+' alimenti.')});
+    }).catch(function(x){var be=document.getElementById('berr');if(be)be.textContent=x.message;else showErr(x)});
+  }
   else if(a==='closefood'){route.food=null;render()}
   else if(a==='addprice'){
     var p=num(document.getElementById('np-p').value),d=document.getElementById('np-d').value||today();

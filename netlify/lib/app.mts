@@ -258,6 +258,15 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
   }
 
   if (parts[0] === "foods") {
+    if (m === "PATCH" && parts.length === 1) {
+      // cambio massivo del prezzo da usare (minimo/medio/massimo/ultimo), solo sugli alimenti di questo cliente
+      const mode = String(b.mode || "");
+      if (!["min", "avg", "max", "last"].includes(mode)) throw bad("Prezzo da usare non valido.");
+      const ids = [...new Set((Array.isArray(b.ids) ? b.ids : []).filter((x: unknown) => uuidOrNull(x)))].slice(0, 5000);
+      if (!ids.length) throw bad("Nessun alimento selezionato.");
+      const r = await q(`UPDATE foods SET price_mode=$1 WHERE tenant_id=$2 AND id = ANY($3::uuid[]) RETURNING id`, [mode, tid, ids]);
+      return json({ ok: true, updated: r.length });
+    }
     if (m === "POST" && parts.length === 1) {
       if (!s.isSuper && !s.tenant.can_add_foods)
         throw forbidden("La creazione di alimenti non è abilitata per la tua attività. Contatta l'amministratore.", "FOODS_DISABLED");
