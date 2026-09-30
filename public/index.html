@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Food Cost</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f6f4ef;--card:#ffffff;--ink:#1f2421;--mut:#6b726d;--line:#e3e0d6;--acc:#b4482b;--acc-ink:#fff;--ok:#2f6b4f;--warn:#b7791f;--bad:#b3261e;--chip:#efece3}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171a18;--card:#212523;--ink:#ecebe6;--mut:#9aa19c;--line:#353a37;--acc:#e0704f;--acc-ink:#1a1a1a;--ok:#5fb28a;--warn:#e0b050;--bad:#f2857d;--chip:#2b302d}}
+:root[data-theme="dark"]{--bg:#171a18;--card:#212523;--ink:#ecebe6;--mut:#9aa19c;--line:#353a37;--acc:#e0704f;--acc-ink:#1a1a1a;--ok:#5fb28a;--warn:#e0b050;--bad:#f2857d;--chip:#2b302d}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;min-height:100%;padding-bottom:84px}
+h1,h2{font-family:Georgia,"Times New Roman",serif;margin:0}
+header{padding:18px 16px 8px;max-width:760px;margin:0 auto}
+header h1{font-size:24px}
+header p{margin:2px 0 0;color:var(--mut);font-size:13px}
+main{max-width:760px;margin:0 auto;padding:8px 16px 24px}
+.bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.bar input,.bar select{flex:1;min-width:120px}
+input,select,textarea,button{font:inherit;color:inherit}
+input,select,textarea{width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:42px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--acc);outline-offset:-1px}
+label{display:block;font-size:12px;color:var(--mut);margin-bottom:10px}
+label>input,label>select{margin-top:4px;color:var(--ink);font-size:15px}
+button{border:0;border-radius:10px;padding:10px 14px;background:var(--chip);cursor:pointer;min-height:42px}
+button.pri{background:var(--acc);color:var(--acc-ink);font-weight:600}
+button.del{color:var(--bad)}
+button.sm{min-height:34px;padding:6px 10px;font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+.item{display:flex;justify-content:space-between;gap:10px;cursor:pointer;align-items:center}
+.item b{display:block}
+.mut{color:var(--mut);font-size:13px}
+.right{text-align:right;white-space:nowrap}
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;background:var(--chip);color:var(--mut)}
+.warn{color:var(--warn)}.bad{color:var(--bad)}.ok{color:var(--ok)}
+.empty{text-align:center;color:var(--mut);padding:36px 12px;border:1px dashed var(--line);border-radius:14px}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px);z-index:5}
+nav .in{display:flex;width:100%;max-width:760px}
+nav button{flex:1;background:none;border-radius:0;padding:12px 4px;font-size:13px;color:var(--mut);min-height:54px}
+nav button.on{color:var(--acc);font-weight:700}
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--bg);width:100%;max-width:760px;max-height:92%;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px))}
+.sheet h2{font-size:20px;margin-bottom:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end}
+.acts{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.acts .pri{flex:1}
+.hist{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:10px 0}
+.stats div{background:var(--chip);border-radius:10px;padding:6px 4px;text-align:center;font-size:12px;color:var(--mut)}
+.stats b{display:block;color:var(--ink);font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px}
+.chip{background:var(--chip);border-radius:99px;padding:5px 6px 5px 12px;font-size:13px;display:flex;gap:6px;align-items:center}
+.chip button{min-height:22px;padding:0 6px;background:none;color:var(--mut);font-size:16px;line-height:1}
+.ing{border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px;background:var(--card)}
+.ing .top{display:flex;gap:8px}
+.ing .top input{flex:1}
+.ing .grid3{margin-top:8px;grid-template-columns:1fr 1fr 1fr}
+.cost{font-weight:700;text-align:right;padding-bottom:10px}
+.tot{background:var(--card);border:2px solid var(--acc);border-radius:14px;padding:12px 14px;margin:14px 0}
+.tot .r{display:flex;justify-content:space-between;padding:3px 0}
+.tot .big{font-size:20px;font-weight:700}
+textarea{min-height:110px;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.soon{font-size:13px;color:var(--mut);margin-top:16px}
+
+nav button{font-size:12px}
+.gh{font-size:15px;margin:18px 0 8px;color:var(--acc);letter-spacing:.05em}
+.kgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.kgrid label{margin:0}
+.kv{background:var(--chip);border-radius:10px;padding:6px 8px;font-size:12px;color:var(--mut)}
+.kv b{display:block;font-size:14px;color:var(--ink)}
+.kv b.ok{color:var(--ok)}.kv b.warn{color:var(--warn)}.kv b.bad{color:var(--bad)}
+.mrow{padding:10px 0;border-bottom:1px solid var(--line)}
+.mrow:last-of-type{border-bottom:0}
+.mh{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.avg{margin-top:8px;padding:8px 10px;border-radius:10px;background:var(--chip);font-size:13px}
+.b-ok{background:rgba(47,107,79,.18);color:var(--ok)}.b-warn{background:rgba(183,121,31,.18);color:var(--warn)}
+.b-info{background:rgba(60,110,190,.18);color:#4a7fd0}.b-bad{background:rgba(179,38,30,.15);color:var(--bad)}.b-mut{background:var(--chip);color:var(--mut)}
+.badge{font-weight:600}
+details.lg{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:10px;font-size:13px}
+details.lg summary{cursor:pointer;font-weight:600}
+details.lg p{margin:6px 0 0}
+</style>
+</head>
+<body>
+<header><h1>Food Cost</h1><p id="sub"></p></header>
+<main id="app"></main>
+<div id="sheet"></div>
+<nav><div class="in">
+  <button data-tab="alimenti">Alimenti</button>
+  <button data-tab="ricette">Ricette</button>
+  <button data-tab="marginalita">Marginalità</button>
+  <button data-tab="menu">Menu eng.</button>
+  <button data-tab="dati">Dati</button>
+</div></nav>
+
+<script>
+var KEY='foodcost:v1';
+var DEF={foods:[],recipes:[],iva:10,fcTarget:30,tenant:{ragione:'',tipo:''},lists:{
+  reparti:['Crostacei','Carne','Cereali','Condimenti','Farine','Formaggi','Frutta','Latte e derivati','Legumi','Olii da condimento','Ortaggi','Pesci','Salumi','Tuberi','Uova','Verdure','Pasta','Spezie','Vini','Dolci'],
+  fornitori:[],
+  tipiAttivita:['Ristorante','Pizzeria','Ristorante-pizzeria','Pizzeria al taglio','Trattoria','Pub','Bar','Gelateria','Pasticceria','Panificio','Hotel / ristorante','Catering','Altro'],
+  tipologie:['INSALATONE','ANTIPASTI','PRIMI','SECONDI','CONTORNI','DOLCI','PIZZE BASILICO','PIZZE CLASSICHE','FOCACCE','PIZZE SEMPLICI','I NS FRITTI','PREPARATI','FUORI MENU']}};
+var S=load();
+var route={tab:'alimenti',q:'',cat:'',food:null,recipe:null};
+
+/* ---------- dati di test (presi dal file Excel: prezzi del 12/06/2026 e quantità delle ricette) ---------- */
+function buildSeed(){
+  var F=[['pomodorini','Ortaggi',3.59],['mozzarella cucina','Formaggi',6.5],['carote','Ortaggi',1.39],['mais','Verdure',4.23],['tonno','Pesci',6.85],['insalata','Verdure',11.47],
+    ['bresaola','Salumi',26.08],['rucola','Verdure',7.92],['grana a scaglie','Formaggi',13.5],['mandilli','Pasta',3.39],['pesto','Condimenti',20.83],['pollo','Carne',10.9],
+    ['melanzane','Ortaggi',2.2],['zucchine','Ortaggi',1.28],['peperoni','Ortaggi',2.49],['mozzarella di bufala','Formaggi',9.9],['burrata','Formaggi',12.49],['prosciutto crudo','Salumi',17.89]];
+  var foods=F.map(function(x){return{id:uid(),name:x[0],category:x[1],supplier:'',unit:'kg',mode:'max',packQty:'',packUnit:'g',history:[{id:uid(),date:'2026-06-12',price:x[2]}]}});
+  function id(n){return foods.filter(function(f){return f.name===n})[0].id}
+  function R(name,type,ing){return{id:uid(),name:name,type:type,portions:1,price:'',rows:ing.map(function(i){return{foodId:id(i[0]),name:i[0],qty:i[1],waste:''}})}}
+  var recipes=[
+    R('CLASSICA','INSALATONE',[['pomodorini',50],['mozzarella cucina',50],['carote',10],['mais',25],['tonno',40],['insalata',40]]),
+    R('BRESAOLA RUCOLA E GRANA','ANTIPASTI',[['bresaola',100],['rucola',25],['grana a scaglie',20]]),
+    R('CRUDO E BUFALA','ANTIPASTI',[['prosciutto crudo',100],['mozzarella di bufala',125]]),
+    R('MANDILLI AL PESTO','PRIMI',[['mandilli',150],['pesto',70]]),
+    R('FILETTO DI POLLO','SECONDI',[['pollo',200],['rucola',20],['grana a scaglie',40],['pomodorini',40]]),
+    R('VERDURE GRIGLIATE','CONTORNI',[['melanzane',75],['zucchine',50],['peperoni',100]])];
+  return{foods:foods,recipes:recipes};
+}
+var TEST={'CLASSICA':[10,106,8],'BRESAOLA RUCOLA E GRANA':[12,60,5],'CRUDO E BUFALA':[13,45,4],'MANDILLI AL PESTO':[11,90,10],'FILETTO DI POLLO':[14,40,15],'VERDURE GRIGLIATE':[6,70,12]};
+function addTest(rs,onlyEmpty){rs.forEach(function(r){var x=TEST[r.name];if(!x)return;if(onlyEmpty&&(r.price||r.sold||r.time))return;r.price=x[0];r.sold=x[1];r.time=x[2]})}
+function applySeed(){var d=buildSeed();addTest(d.recipes,false);S.foods=d.foods;S.recipes=d.recipes;S.lists=clone(DEF.lists);S.seeded=true;S.seedVer=2;save()}
+if(!S.seeded&&!S.foods.length&&!S.recipes.length)applySeed();
+if(S.seeded&&S.seedVer!==2){addTest(S.recipes,true);S.seedVer=2;save()}
+
+function clone(o){return JSON.parse(JSON.stringify(o))}
+function load(){try{var r=localStorage.getItem(KEY);if(r){var o=JSON.parse(r);var d=clone(DEF);for(var k in o)d[k]=o[k];return ensure(d)}}catch(e){}return clone(DEF)}
+function ensure(d){if(!d.lists)d.lists=clone(DEF.lists);for(var lk in DEF.lists)if(!d.lists[lk])d.lists[lk]=clone(DEF.lists[lk]);if(!d.tenant)d.tenant={ragione:'',tipo:''};if(!d.fcTarget)d.fcTarget=30;if(!d.iva)d.iva=10;if(!d.foods)d.foods=[];if(!d.recipes)d.recipes=[];return d}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function uid(){return Math.random().toString(36).slice(2,9)}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function num(v){var n=parseFloat(String(v).replace(',','.'));return isNaN(n)?0:n}
+function eur(n,d){if(n==null||isNaN(n))return '—';return n.toLocaleString('it-IT',{style:'currency',currency:'EUR',minimumFractionDigits:d==null?2:d,maximumFractionDigits:d==null?2:d})}
+function today(){return new Date().toISOString().slice(0,10)}
+function dIt(s){var p=String(s).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:s}
+
+/* ---------- calcoli alimenti ---------- */
+var MODES={min:'Minimo',avg:'Medio',max:'Massimo',last:'Ultimo'};
+function stats(f){
+  var h=(f.history||[]).filter(function(x){return x.price>0}).slice().sort(function(a,b){return a.date<b.date?-1:1});
+  if(!h.length)return null;
+  var p=h.map(function(x){return x.price});
+  return{min:Math.min.apply(null,p),max:Math.max.apply(null,p),avg:p.reduce(function(a,b){return a+b},0)/p.length,last:p[p.length-1]};
+}
+function selPrice(f){var s=stats(f);return s?s[f.mode||'max']:null}
+/* restituisce {basis:'mass'|'volume'|'piece', perBase: € per g / ml / pz, label:'€/kg', disp: valore mostrato} */
+function unitInfo(f){
+  var P=selPrice(f);if(P==null)return null;
+  var u=f.unit||'kg';
+  if(u==='kg')return{basis:'mass',perBase:P/1000,label:'/kg',disp:P};
+  if(u==='lt')return{basis:'volume',perBase:P/1000,label:'/lt',disp:P};
+  if(u==='pz')return{basis:'piece',perBase:P,label:'/pz',disp:P};
+  var q=num(f.packQty);if(q<=0)return null;
+  var pu=f.packUnit||'g',per=P/q;
+  if(pu==='g')return{basis:'mass',perBase:per,label:'/kg',disp:per*1000};
+  if(pu==='ml')return{basis:'volume',perBase:per,label:'/lt',disp:per*1000};
+  return{basis:'piece',perBase:per,label:'/pz',disp:per};
+}
+var BASEU={mass:'g',volume:'ml',piece:'pz'};
+function foodByName(n){n=String(n).trim().toLowerCase();return S.foods.filter(function(f){return f.name.trim().toLowerCase()===n})[0]}
+function foodById(id){return S.foods.filter(function(f){return f.id===id})[0]}
+
+/* ---------- calcoli ricette ---------- */
+function rowCost(r){
+  var f=foodById(r.foodId);if(!f)return null;
+  var ui=unitInfo(f);if(!ui)return null;
+  var w=Math.min(Math.max(num(r.waste),0),99.9);
+  return num(r.qty)*ui.perBase/(1-w/100);
+}
+function recipeTotal(rc){var t=0,miss=0;rc.rows.forEach(function(r){if(!r.foodId&&!r.name)return;var c=rowCost(r);if(c==null)miss++;else t+=c});return{total:t,miss:miss}}
+
+/* ---------- render ---------- */
+function render(){
+  document.querySelectorAll('nav button').forEach(function(b){b.classList.toggle('on',b.dataset.tab===route.tab&&!route.recipe)});
+  subt();
+  var app=document.getElementById('app');
+  if(route.recipe)app.innerHTML=recipeEditorHTML();
+  else if(route.tab==='alimenti')app.innerHTML=foodsHTML();
+  else if(route.tab==='ricette')app.innerHTML=recipesHTML();
+  else if(route.tab==='marginalita')app.innerHTML=margHTML();
+  else if(route.tab==='menu')app.innerHTML=menuHTML();
+  else app.innerHTML=datiHTML();
+  document.getElementById('sheet').innerHTML=route.food?foodSheetHTML():'';
+  if(route.recipe)recalc();
+  else if(route.tab==='marginalita')paintMarg();
+  else if(route.tab==='menu')paintMenu();
+}
+
+/* ---------- ALIMENTI ---------- */
+function foodsHTML(){
+  var q=route.q.toLowerCase();
+  var list=S.foods.filter(function(f){return(!q||f.name.toLowerCase().indexOf(q)>=0||(f.supplier||'').toLowerCase().indexOf(q)>=0)&&(!route.cat||f.category===route.cat)})
+    .sort(function(a,b){return a.name.localeCompare(b.name,'it')});
+  var h='<div class="bar"><input id="q" placeholder="Cerca alimento o fornitore" value="'+esc(route.q)+'" oninput="route.q=this.value;keepFocus(\'q\',foodsList)">'
+   +'<select onchange="route.cat=this.value;render()"><option value="">Tutti i reparti</option>'+S.lists.reparti.map(function(c){return'<option'+(route.cat===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select>'
+   +'<button class="pri" data-act="newfood">+ Alimento</button></div><div id="flist">'+foodsList()+'</div>';
+  return h;
+}
+function foodsList(){
+  var q=route.q.toLowerCase();
+  var list=S.foods.filter(function(f){return(!q||f.name.toLowerCase().indexOf(q)>=0||(f.supplier||'').toLowerCase().indexOf(q)>=0)&&(!route.cat||f.category===route.cat)})
+    .sort(function(a,b){return a.name.localeCompare(b.name,'it')});
+  if(!S.foods.length)return'<div class="empty">Nessun alimento.<br>Tocca “+ Alimento” per inserire il primo.</div>';
+  if(!list.length)return'<div class="empty">Nessun risultato.</div>';
+  return list.map(function(f){
+    var ui=unitInfo(f);
+    return'<div class="card item" data-act="editfood" data-id="'+f.id+'"><div><b>'+esc(f.name)+'</b><span class="mut">'+esc(f.category||'Senza reparto')+(f.supplier?' · '+esc(f.supplier):'')+'</span></div>'
+    +'<div class="right">'+(ui?'<b>'+eur(ui.disp)+ui.label+'</b><span class="mut">prezzo '+MODES[f.mode||'max'].toLowerCase()+'</span>':'<span class="warn">senza prezzo</span>')+'</div></div>';
+  }).join('');
+}
+function keepFocus(id,fn){var el=document.getElementById('flist')||document.getElementById('rlist');if(el)el.innerHTML=fn()}
+
+function foodSheetHTML(){
+  var f=route.food,st=stats(f),ui=unitInfo(f);
+  var hist=(f.history||[]).slice().sort(function(a,b){return a.date<b.date?1:-1});
+  return'<div class="sheet-bg" data-act="closefood"><div class="sheet" onclick="event.stopPropagation()">'
+  +'<h2>'+(f.isNew?'Nuovo alimento':'Modifica alimento')+'</h2>'
+  +'<label>Descrizione prodotto *<input value="'+esc(f.name)+'" oninput="route.food.name=this.value" placeholder="es. Mozzarella"></label>'
+  +'<div class="grid2"><label>Reparto<select onchange="route.food.category=this.value"><option value="">—</option>'+S.lists.reparti.map(function(c){return'<option'+(f.category===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select></label>'
+  +'<label>Fornitore (facoltativo)<input list="suppl" value="'+esc(f.supplier||'')+'" oninput="route.food.supplier=this.value"><datalist id="suppl">'+S.lists.fornitori.map(function(s){return'<option value="'+esc(s)+'">'}).join('')+'</datalist></label></div>'
+  +'<div class="grid2"><label>Il prezzo è espresso a<select onchange="route.food.unit=this.value;refreshSheet()">'
+    +[['kg','€ al kg'],['lt','€ al litro'],['pz','€ al pezzo'],['conf','€ a confezione']].map(function(o){return'<option value="'+o[0]+'"'+((f.unit||'kg')===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select></label>'
+  +'<label>Prezzo da utilizzare<select onchange="route.food.mode=this.value;refreshSheet()">'+Object.keys(MODES).map(function(k){return'<option value="'+k+'"'+((f.mode||'max')===k?' selected':'')+'>'+MODES[k]+'</option>'}).join('')+'</select></label></div>'
+  +((f.unit==='conf')?'<div class="grid2"><label>Quantità nella confezione<input type="number" inputmode="decimal" value="'+esc(f.packQty||'')+'" oninput="route.food.packQty=this.value" onchange="refreshSheet()" placeholder="es. 1000"></label>'
+    +'<label>Unità della confezione<select onchange="route.food.packUnit=this.value;refreshSheet()">'+[['g','grammi'],['ml','millilitri'],['pz','pezzi']].map(function(o){return'<option value="'+o[0]+'"'+((f.packUnit||'g')===o[0]?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select></label></div>':'')
+  +'<h2 style="font-size:16px;margin-top:6px">Storico prezzi</h2>'
+  +'<div class="grid3"><label>Data<input type="date" id="np-d" value="'+today()+'"></label><label>Prezzo €<input id="np-p" type="number" inputmode="decimal" step="0.01" placeholder="0,00"></label><button class="pri" style="margin-bottom:10px" data-act="addprice">Aggiungi</button></div>'
+  +(st?'<div class="stats"><div>Minimo<b>'+eur(st.min)+'</b></div><div>Medio<b>'+eur(st.avg)+'</b></div><div>Massimo<b>'+eur(st.max)+'</b></div><div>Ultimo<b>'+eur(st.last)+'</b></div></div>':'<p class="mut">Nessun prezzo inserito.</p>')
+  +hist.map(function(h){return'<div class="hist"><span>'+dIt(h.date)+'</span><span><b>'+eur(h.price)+'</b> <button class="sm del" data-act="delprice" data-id="'+h.id+'">✕</button></span></div>'}).join('')
+  +(ui?'<p class="ok" style="margin:12px 0 0"><b>Costo usato nelle ricette: '+eur(ui.disp)+ui.label+'</b></p>':(f.unit==='conf'&&stats(f)?'<p class="warn">Indica la quantità della confezione.</p>':''))
+  +'<p id="ferr" class="bad" style="margin:8px 0 0"></p>'
+  +'<div class="acts"><button class="pri" data-act="savefood">Salva</button><button data-act="closefood">Annulla</button>'+(f.isNew?'':'<button class="del" data-act="delfood">Elimina</button>')+'</div></div></div>';
+}
+function refreshSheet(){document.getElementById('sheet').innerHTML=route.food?foodSheetHTML():''}
+
+/* ---------- RICETTE ---------- */
+function recipesHTML(){
+  return'<div class="bar"><input id="q" placeholder="Cerca ricetta" value="'+esc(route.q)+'" oninput="route.q=this.value;document.getElementById(\'rlist\').innerHTML=recipesList()">'
+  +'<select onchange="route.cat=this.value;render()"><option value="">Tutte le tipologie</option>'+S.lists.tipologie.map(function(c){return'<option'+(route.cat===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select>'
+  +'<button class="pri" data-act="newrecipe">+ Ricetta</button></div><div id="rlist">'+recipesList()+'</div>';
+}
+function recipesList(){
+  var q=route.q.toLowerCase();
+  var list=S.recipes.filter(function(r){return(!q||r.name.toLowerCase().indexOf(q)>=0)&&(!route.cat||r.type===route.cat)}).sort(function(a,b){return a.name.localeCompare(b.name,'it')});
+  if(!S.recipes.length)return'<div class="empty">Nessuna ricetta.<br>Prima inserisci qualche alimento, poi tocca “+ Ricetta”.</div>';
+  if(!list.length)return'<div class="empty">Nessun risultato.</div>';
+  return list.map(function(r){var t=recipeTotal(r),d=num(r.portions)||1;
+    return'<div class="card item" data-act="editrecipe" data-id="'+r.id+'"><div><b>'+esc(r.name)+'</b><span class="badge">'+esc(r.type||'Senza tipologia')+'</span> <span class="mut">'+r.rows.length+' ingr.</span></div>'
+    +'<div class="right"><b>'+eur(t.total/d)+'</b><span class="mut">per dose'+(t.miss?' <span class="warn">· '+t.miss+' senza prezzo</span>':'')+'</span></div></div>'}).join('');
+}
+function recipeEditorHTML(){
+  var r=route.recipe;
+  return'<div class="bar"><button data-act="backrecipe">← Ricette</button></div>'
+  +'<label>Nome piatto *<input value="'+esc(r.name)+'" oninput="route.recipe.name=this.value" placeholder="es. Calzone"></label>'
+  +'<div class="grid2"><label>Tipologia<select onchange="route.recipe.type=this.value"><option value="">—</option>'+S.lists.tipologie.map(function(c){return'<option'+(r.type===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select></label>'
+  +'<label>Dosi (porzioni della ricetta)<input type="number" inputmode="decimal" value="'+esc(r.portions)+'" oninput="route.recipe.portions=this.value;recalc()"></label></div>'
+  +'<h2 style="font-size:17px;margin:6px 0 10px">Ingredienti</h2>'
+  +'<datalist id="foodlist">'+S.foods.map(function(f){return'<option value="'+esc(f.name)+'">'}).join('')+'</datalist>'
+  +r.rows.map(function(row,i){return rowHTML(row,i)}).join('')
+  +'<button data-act="addrow" style="width:100%">+ Aggiungi ingrediente</button>'
+  +'<div class="tot"><div class="r"><span>Costo totale ricetta</span><b id="t-tot"></b></div><div class="r"><span>Costo per dose</span><b class="big" id="t-dose"></b></div>'
+  +'<div id="t-warn" class="warn" style="font-size:13px"></div>'
+  +'<hr style="border:0;border-top:1px solid var(--line);margin:10px 0">'
+  +'<label style="margin:0">Prezzo di vendita IVA inclusa (facoltativo)<input type="number" inputmode="decimal" step="0.01" value="'+esc(r.price||'')+'" oninput="route.recipe.price=this.value;recalc()"></label>'
+  +'<div class="r" style="margin-top:8px"><span>Food cost %</span><b id="t-fc"></b></div><div class="r"><span>Margine (IVA esclusa)</span><b id="t-mg"></b></div></div>'
+  +'<div id="rerr" class="bad"></div>'
+  +'<div class="acts"><button class="pri" data-act="saverecipe">Salva ricetta</button><button data-act="dupl">Duplica</button>'+(r.isNew?'':'<button class="del" data-act="delrecipe">Elimina</button>')+'</div>';
+}
+function rowHTML(row,i){
+  var f=foodById(row.foodId),ui=f?unitInfo(f):null,u=ui?BASEU[ui.basis]:'g';
+  return'<div class="ing" data-i="'+i+'"><div class="top"><input list="foodlist" placeholder="Cerca ingrediente…" value="'+esc(row.name||'')+'" oninput="pickFood('+i+',this.value)"><button class="sm del" data-act="delrow" data-i="'+i+'">✕</button></div>'
+  +'<div class="grid3"><label>Quantità (<span id="u'+i+'">'+u+'</span>)<input type="number" inputmode="decimal" value="'+esc(row.qty||'')+'" oninput="route.recipe.rows['+i+'].qty=this.value;recalc()"></label>'
+  +'<label>Scarto %<input type="number" inputmode="decimal" value="'+esc(row.waste||'')+'" oninput="route.recipe.rows['+i+'].waste=this.value;recalc()" placeholder="0"></label>'
+  +'<div class="cost" id="c'+i+'"></div></div><div class="mut" id="m'+i+'"></div></div>';
+}
+function pickFood(i,v){
+  var row=route.recipe.rows[i],f=foodByName(v);
+  row.name=v;row.foodId=f?f.id:'';
+  recalc();
+}
+function recalc(){
+  var r=route.recipe;if(!r)return;
+  r.rows.forEach(function(row,i){
+    var f=foodById(row.foodId),ui=f?unitInfo(f):null,c=rowCost(row);
+    var ce=document.getElementById('c'+i),me=document.getElementById('m'+i),ue=document.getElementById('u'+i);
+    if(ue)ue.textContent=ui?BASEU[ui.basis]:'g';
+    if(ce)ce.textContent=c==null?'—':eur(c);
+    if(me){
+      if(!row.name)me.textContent='';
+      else if(!f)me.innerHTML='<span class="warn">Alimento non trovato in anagrafica</span>';
+      else if(!ui)me.innerHTML='<span class="warn">Alimento senza prezzo valido</span>';
+      else me.textContent='Costo base '+eur(ui.disp)+ui.label;
+    }
+  });
+  var t=recipeTotal(r),d=num(r.portions)>0?num(r.portions):1,dose=t.total/d;
+  var s=function(id,v,h){var e=document.getElementById(id);if(e){if(h)e.innerHTML=v;else e.textContent=v}};
+  s('t-tot',eur(t.total));s('t-dose',eur(dose));
+  s('t-warn',t.miss?t.miss+' ingrediente/i senza prezzo: il totale è parziale':'');
+  var p=num(r.price),net=p/(1+S.iva/100);
+  s('t-fc',p>0?(dose/net*100).toFixed(1).replace('.',',')+' %':'—');
+  s('t-mg',p>0?eur(net-dose):'—');
+}
+
+/* ---------- MARGINALITÀ ---------- */
+var SUBS={alimenti:'Anagrafica alimenti e prezzi',ricette:'Ricettario e food cost',marginalita:'Food cost e margini per piatto',menu:'Menu engineering',dati:'Anagrafica attività, liste e backup'};
+function subt(){
+  var t=S.tenant.ragione?S.tenant.ragione+(S.tenant.tipo?' · '+S.tenant.tipo:''):'';
+  var e=document.getElementById('sub');if(e)e.textContent=route.recipe?'Ricetta':(t?t+' — ':'')+SUBS[route.tab];
+}
+function byName(a,b){return a.name.localeCompare(b.name,'it')}
+function groups(){
+  var g=[];
+  S.lists.tipologie.forEach(function(t){var rs=S.recipes.filter(function(r){return r.type===t});if(rs.length)g.push({t:t,rs:rs.sort(byName)})});
+  var o=S.recipes.filter(function(r){return !r.type||S.lists.tipologie.indexOf(r.type)<0});
+  if(o.length)g.push({t:'Senza tipologia',rs:o.sort(byName)});
+  return g;
+}
+function calcR(r){
+  var t=recipeTotal(r),d=num(r.portions)>0?num(r.portions):1,dose=t.total/d,p=num(r.price),net=p>0?p/(1+S.iva/100):0;
+  return{dose:dose,miss:t.miss,p:p,net:net,ok:t.total>0,fcPct:net>0?dose/net:null,mg:net>0?net-dose:null,mgPct:net>0?(net-dose)/net:null};
+}
+function pct(x){return x==null?'—':(x*100).toFixed(1).replace('.',',')+' %'}
+function fcClass(x){if(x==null)return'';var t=S.fcTarget/100;return x<=t?'ok':(x<=t+0.05?'warn':'bad')}
+function setT(id,t){var e=document.getElementById(id);if(e)e.textContent=t}
+function setPrice(id,v){var r=S.recipes.filter(function(x){return x.id===id})[0];r.price=v;save();paintMarg()}
+function margHTML(){
+  if(!S.recipes.length)return'<div class="empty">Nessuna ricetta.<br>Creale nella sezione Ricette.</div>';
+  return'<p class="mut" style="margin:0 0 6px">Inserisci il prezzo di vendita IVA inclusa: food cost e margini si calcolano da soli. Il food cost è verde fino al '+S.fcTarget+'%, arancione fino a +5 punti, poi rosso.</p>'
+  +groups().map(function(g,gi){
+    return'<h2 class="gh">'+esc(g.t)+'</h2><div class="card">'+g.rs.map(function(r){
+      return'<div class="mrow"><div class="mh"><b>'+esc(r.name)+'</b><span class="mut warn" id="mw-'+r.id+'"></span></div>'
+      +'<div class="kgrid"><label>Prezzo IVA incl. €<input type="number" inputmode="decimal" step="0.01" value="'+esc(r.price||'')+'" oninput="setPrice(\''+r.id+'\',this.value)"></label>'
+      +'<div class="kv">Prezzo IVA escl.<b id="mn-'+r.id+'"></b></div><div class="kv">Food cost dose<b id="mf-'+r.id+'"></b></div>'
+      +'<div class="kv">Food cost %<b id="mp-'+r.id+'"></b></div><div class="kv">Margine €<b id="mg-'+r.id+'"></b></div><div class="kv">Margine %<b id="mq-'+r.id+'"></b></div></div></div>';
+    }).join('')+'<div class="avg" id="ma-'+gi+'"></div></div>';
+  }).join('');
+}
+function paintMarg(){
+  groups().forEach(function(g,gi){
+    var sd=0,sn=0,smg=0,n=0;
+    g.rs.forEach(function(r){
+      var c=calcR(r);
+      setT('mn-'+r.id,c.net>0?eur(c.net):'—');setT('mf-'+r.id,c.ok?eur(c.dose):'—');
+      var e=document.getElementById('mp-'+r.id);if(e){e.textContent=pct(c.fcPct);e.className=fcClass(c.fcPct)}
+      setT('mg-'+r.id,c.mg==null?'—':eur(c.mg));setT('mq-'+r.id,pct(c.mgPct));
+      setT('mw-'+r.id,c.miss?'⚠ '+c.miss+' ingr. senza prezzo':'');
+      if(c.net>0&&c.ok){sd+=c.dose;sn+=c.net;smg+=c.mg;n++}
+    });
+    setT('ma-'+gi,n?'Media categoria · Food cost '+pct(sd/sn)+' · Margine '+eur(smg/n)+' · Prezzo medio IVA escl. '+eur(sn/n):'Media categoria: inserisci i prezzi di vendita');
+  });
+}
+
+/* ---------- MENU ENGINEERING ---------- */
+function setMenu(id,f,v){var r=S.recipes.filter(function(x){return x.id===id})[0];r[f]=v;save();paintMenu()}
+function classify(x,aJ,aG,aK){
+  if(!(x.net>0&&x.c.ok))return{t:'Manca prezzo o ingredienti',c:'b-mut',h:''};
+  if(!(x.sold>0))return{t:'Inserisci il venduto',c:'b-mut',h:''};
+  var P=x.sold<aJ?'-':'+',Q=x.mg<aG?'-':'+',fast=x.tm>0&&x.tm<aK;
+  var b={'++':['Fuoriclasse','b-ok','Mantienilo e promuovilo.'],'+-':['Instancabili','b-warn','Molto venduto ma rende poco: ritocca prezzo o food cost.'],'-+':['Diamanti grezzi','b-info','Rende bene ma si vende poco: valorizzalo nel menù.'],'--':['Rami secchi','b-bad','Poco venduto e poco redditizio: rivedilo o toglilo.']}[P+Q];
+  return{t:b[0]+(fast?' veloci':''),c:b[1],h:b[2]};
+}
+function menuHTML(){
+  if(!S.recipes.length)return'<div class="empty">Nessuna ricetta.<br>Creale nella sezione Ricette.</div>';
+  return'<details class="lg"><summary>Come si legge</summary><p>Ogni piatto è confrontato con la <b>media della sua categoria</b> su tre aspetti: vendite (popolarità), margine in € (profittabilità) e tempo di preparazione. Il prezzo si inserisce in Marginalità.</p>'
+  +'<p><b>Fuoriclasse</b>: vende e rende sopra media. <b>Instancabili</b>: vende molto, rende poco. <b>Diamanti grezzi</b>: rende ma vende poco. <b>Rami secchi</b>: né l’uno né l’altro. “Veloci” = tempo sotto la media della categoria.</p></details>'
+  +groups().map(function(g,gi){
+    return'<h2 class="gh">'+esc(g.t)+'</h2><div class="card">'+g.rs.map(function(r){
+      return'<div class="mrow"><div class="mh"><b>'+esc(r.name)+'</b><span class="badge" id="bd-'+r.id+'"></span></div><div class="mut" id="bh-'+r.id+'" style="margin-top:2px"></div>'
+      +'<div class="kgrid"><label>Venduto (n.)<input type="number" inputmode="numeric" value="'+esc(r.sold||'')+'" oninput="setMenu(\''+r.id+'\',\'sold\',this.value)"></label>'
+      +'<label>Tempo prep.+serv. (min)<input type="number" inputmode="decimal" value="'+esc(r.time||'')+'" oninput="setMenu(\''+r.id+'\',\'time\',this.value)"></label>'
+      +'<div class="kv">Margine € (netto)<b id="xg-'+r.id+'"></b></div>'
+      +'<div class="kv">Margine %<b id="xq-'+r.id+'"></b></div><div class="kv">Moltiplicatore<b id="xm-'+r.id+'"></b></div><div class="kv">Incasso totale<b id="xi-'+r.id+'"></b></div>'
+      +'<div class="kv">Food cost tot.<b id="xf-'+r.id+'"></b></div><div class="kv">Margine tot.<b id="xt-'+r.id+'"></b></div><div class="kv">% margine categ.<b id="xs-'+r.id+'"></b></div></div></div>';
+    }).join('')+'<div class="avg" id="xa-'+gi+'"></div></div>';
+  }).join('');
+}
+function avgOf(a){return a.length?a.reduce(function(s,v){return s+v},0)/a.length:0}
+function paintMenu(){
+  groups().forEach(function(g,gi){
+    var it=g.rs.map(function(r){var c=calcR(r);return{r:r,c:c,sold:num(r.sold),tm:num(r.time),net:c.net,fc:c.dose,mg:c.net>0?c.net-c.dose:0}});
+    var ok=it.filter(function(x){return x.net>0&&x.c.ok});
+    var aJ=avgOf(ok.filter(function(x){return x.sold>0}).map(function(x){return x.sold}));
+    var aG=avgOf(ok.filter(function(x){return x.mg>0}).map(function(x){return x.mg}));
+    var aK=avgOf(ok.filter(function(x){return x.tm>0}).map(function(x){return x.tm}));
+    var tInc=0,tFc=0,tMg=0;
+    ok.forEach(function(x){tInc+=x.net*x.sold;tFc+=x.fc*x.sold;tMg+=x.mg*x.sold});
+    it.forEach(function(x){
+      var id=x.r.id,cl=classify(x,aJ,aG,aK),bd=document.getElementById('bd-'+id);
+      if(bd){bd.textContent=cl.t;bd.className='badge '+cl.c}
+      setT('bh-'+id,cl.h);
+      var has=x.net>0&&x.c.ok;
+      setT('xg-'+id,has?eur(x.mg):'—');setT('xq-'+id,has?pct(x.mg/x.net):'—');
+      setT('xm-'+id,has&&x.fc>0?(x.net/x.fc).toFixed(2).replace('.',',')+'x':'—');
+      setT('xi-'+id,has&&x.sold>0?eur(x.net*x.sold):'—');setT('xf-'+id,has&&x.sold>0?eur(x.fc*x.sold):'—');
+      setT('xt-'+id,has&&x.sold>0?eur(x.mg*x.sold):'—');setT('xs-'+id,has&&x.sold>0&&tMg>0?pct(x.mg*x.sold/tMg):'—');
+    });
+    setT('xa-'+gi,ok.length?'Medie · venduto '+aJ.toFixed(0)+' · margine '+eur(aG)+(aK?' · tempo '+aK.toFixed(1).replace('.',',')+' min':'')+'  |  Totali · incasso '+eur(tInc)+' · food cost '+eur(tFc)+' · margine '+eur(tMg):'Inserisci i prezzi in Marginalità per vedere medie e totali');
+  });
+}
+
+/* ---------- DATI ---------- */
+function datiHTML(){
+  function box(key,title,ph){return'<div class="card"><b>'+title+'</b><div class="chips">'+S.lists[key].map(function(v,i){return'<span class="chip">'+esc(v)+'<button data-act="dellist" data-k="'+key+'" data-i="'+i+'">×</button></span>'}).join('')+(S.lists[key].length?'':'<span class="mut">Nessuno</span>')+'</div>'
+   +'<div class="bar" style="margin:0"><input id="add-'+key+'" placeholder="'+ph+'"><button class="pri" style="flex:0" data-act="addlist" data-k="'+key+'">Aggiungi</button></div></div>'}
+  var ten='<div class="card"><b>Anagrafica attività</b><div style="height:8px"></div><label>Ragione sociale<input value="'+esc(S.tenant.ragione)+'" oninput="S.tenant.ragione=this.value;save();subt()"></label>'
+   +'<label style="margin:0">Tipo di attività<select onchange="S.tenant.tipo=this.value;save();subt()"><option value="">—</option>'+S.lists.tipiAttivita.map(function(v){return'<option'+(S.tenant.tipo===v?' selected':'')+'>'+esc(v)+'</option>'}).join('')+'</select></label></div>';
+  return ten+box('reparti','Reparti','Nuovo reparto')+box('fornitori','Fornitori','Nuovo fornitore')+box('tipologie','Tipologie piatti','Nuova tipologia')+box('tipiAttivita','Tipi di attività','Nuovo tipo di attività')
+  +'<div class="card"><label style="margin:0">Aliquota IVA sulle vendite (%)<input type="number" inputmode="decimal" value="'+S.iva+'" oninput="S.iva=num(this.value);save()"></label></div>'
+  +'<div class="card"><label style="margin:0">Food cost obiettivo (%)<input type="number" inputmode="decimal" value="'+S.fcTarget+'" oninput="S.fcTarget=num(this.value)||30;save()"></label></div>'
+  +'<div class="card"><b>Backup dati</b><p class="mut" style="margin:4px 0 8px">I dati sono salvati in questo browser. Copia il backup e conservalo: serve per spostare i dati su un altro dispositivo.</p>'
+  +'<textarea id="bk" placeholder="Il backup appare qui. Per ripristinare, incolla qui un backup e premi Importa."></textarea>'
+  +'<div class="acts"><button class="pri" data-act="export">Esporta</button><button data-act="import">Importa</button></div><p id="bkmsg" class="mut"></p></div>'
+  +'<div class="card"><b>Dati di test</b><p class="mut" style="margin:4px 0 8px">18 alimenti e 6 ricette con prezzi e quantità presi dal tuo Excel. Prezzi di vendita, venduto e tempi sono valori di prova. Attenzione: sostituisce tutti i dati attuali.</p><button data-act="reseed">Ricarica dati di test</button></div>'
+  +'<p class="soon">In arrivo: Matrice, accesso clienti con login.</p>';
+}
+
+/* ---------- eventi ---------- */
+document.addEventListener('click',function(e){
+  var t=e.target.closest('[data-tab],[data-act]');if(!t)return;
+  if(t.dataset.tab){route.tab=t.dataset.tab;route.recipe=null;route.food=null;route.cat='';route.q='';render();window.scrollTo(0,0);return}
+  var a=t.dataset.act,id=t.dataset.id;
+  if(a==='newfood'){route.food={id:uid(),isNew:true,name:'',category:'',supplier:'',unit:'kg',mode:'max',packQty:'',packUnit:'g',history:[]};render()}
+  else if(a==='editfood'){route.food=clone(foodById(id));render()}
+  else if(a==='closefood'){route.food=null;render()}
+  else if(a==='addprice'){
+    var p=num(document.getElementById('np-p').value),d=document.getElementById('np-d').value||today();
+    if(p>0){route.food.history.push({id:uid(),date:d,price:p});refreshSheet()}
+  }
+  else if(a==='delprice'){route.food.history=route.food.history.filter(function(h){return h.id!==id});refreshSheet()}
+  else if(a==='savefood'){
+    var f=route.food,err=document.getElementById('ferr');
+    if(!f.name.trim()){err.textContent='Inserisci la descrizione del prodotto.';return}
+    var dup=S.foods.filter(function(x){return x.id!==f.id&&x.name.trim().toLowerCase()===f.name.trim().toLowerCase()})[0];
+    if(dup){err.textContent='Esiste già un alimento con questo nome.';return}
+    f.name=f.name.trim();
+    if(f.supplier&&f.supplier.trim()&&S.lists.fornitori.indexOf(f.supplier.trim())<0)S.lists.fornitori.push(f.supplier.trim());
+    var isNew=f.isNew;delete f.isNew;
+    if(isNew)S.foods.push(f);else S.foods=S.foods.map(function(x){return x.id===f.id?f:x});
+    save();route.food=null;render();
+  }
+  else if(a==='delfood'){
+    if(t.dataset.armed){S.foods=S.foods.filter(function(x){return x.id!==route.food.id});save();route.food=null;render()}
+    else{t.dataset.armed='1';t.textContent='Tocca ancora per eliminare'}
+  }
+  else if(a==='newrecipe'){route.recipe={id:uid(),isNew:true,name:'',type:'',portions:1,price:'',rows:[{foodId:'',name:'',qty:'',waste:''}]};render();window.scrollTo(0,0)}
+  else if(a==='editrecipe'){route.recipe=clone(S.recipes.filter(function(r){return r.id===id})[0]);render();window.scrollTo(0,0)}
+  else if(a==='backrecipe'){route.recipe=null;render()}
+  else if(a==='addrow'){route.recipe.rows.push({foodId:'',name:'',qty:'',waste:''});render();
+    var inp=document.querySelectorAll('.ing .top input');if(inp.length)inp[inp.length-1].focus()}
+  else if(a==='delrow'){route.recipe.rows.splice(+t.dataset.i,1);render()}
+  else if(a==='saverecipe'||a==='dupl'){
+    var r=route.recipe,err2=document.getElementById('rerr');
+    if(!r.name.trim()){err2.textContent='Inserisci il nome del piatto.';return}
+    r.name=r.name.trim();r.rows=r.rows.filter(function(x){return x.foodId||x.name});
+    if(a==='dupl'){r=clone(r);r.id=uid();r.name=r.name+' (copia)';r.isNew=true}
+    var nw=r.isNew;delete r.isNew;
+    if(nw)S.recipes.push(r);else S.recipes=S.recipes.map(function(x){return x.id===r.id?r:x});
+    save();route.recipe=null;render();
+  }
+  else if(a==='delrecipe'){
+    if(t.dataset.armed){S.recipes=S.recipes.filter(function(x){return x.id!==route.recipe.id});save();route.recipe=null;render()}
+    else{t.dataset.armed='1';t.textContent='Tocca ancora per eliminare'}
+  }
+  else if(a==='addlist'){var k=t.dataset.k,el=document.getElementById('add-'+k),v=el.value.trim();if(v&&S.lists[k].indexOf(v)<0){S.lists[k].push(v);S.lists[k].sort(function(x,y){return x.localeCompare(y,'it')});save();render()}}
+  else if(a==='dellist'){S.lists[t.dataset.k].splice(+t.dataset.i,1);save();render()}
+  else if(a==='reseed'){if(t.dataset.armed){applySeed();render()}else{t.dataset.armed='1';t.textContent='Tocca ancora per sostituire tutto'}}
+  else if(a==='export'){var ta=document.getElementById('bk');ta.value=JSON.stringify(S);ta.select();
+    try{navigator.clipboard.writeText(ta.value).then(function(){msg('Backup copiato negli appunti.')},function(){msg('Backup pronto: selezionalo e copialo.')})}catch(x){msg('Backup pronto: selezionalo e copialo.')}}
+  else if(a==='import'){try{var o=JSON.parse(document.getElementById('bk').value);if(!o.foods||!o.recipes)throw 0;S=ensure(o);save();render();msg('Dati importati.')}catch(x){msg('Backup non valido.')}}
+});
+function msg(m){var e=document.getElementById('bkmsg');if(e)e.textContent=m}
+render();
+</script>
+</body>
+</html>

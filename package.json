@@ -1,0 +1,17 @@
+{
+  "name": "foodcost",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-strip-types --no-warnings test/run.mts"
+  },
+  "dependencies": {
+    "@netlify/database": "^2.0.1",
+    "bcryptjs": "^3.0.3",
+    "jose": "^6.2.12"
+  },
+  "devDependencies": {
+    "@netlify/functions": "^6.0.1",
+    "pg": "^8.13.0"
+  }
+}
