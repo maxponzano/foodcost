@@ -133,6 +133,8 @@ details.tc summary::-webkit-details-marker{display:none}
 .qleg i{width:10px;height:10px;border-radius:50%;display:inline-block}
 .qnote{font-size:12px;color:var(--mut);padding:6px 0 10px}
 .thead{display:none}
+.rlink{cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.rlink:hover{color:var(--acc);text-decoration-color:var(--acc)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .gh{color:var(--brand-soft)}}
 :root[data-theme="dark"] .gh{color:var(--brand-soft)}
 /* ---------- computer ---------- */
@@ -328,6 +330,7 @@ function render(){
   else if(route.tab==='marginalita')paintMarg();
   else if(route.tab==='menu')paintMenu();
   applyRO();
+  if(route.restoreY!=null&&!route.recipe){window.scrollTo(0,route.restoreY);route.restoreY=null}
 }
 /* sola lettura: nasconde i pulsanti di modifica e blocca i campi (il server rifiuta comunque ogni scrittura) */
 var WRITE=['bulkmode','newfood','savefood','delfood','addprice','delprice','newrecipe','saverecipe','dupl','delrecipe','addrow','delrow','addlist','dellist'];
@@ -457,7 +460,7 @@ function recipesList(){
 }
 function recipeEditorHTML(){
   var r=route.recipe;
-  return'<div class="bar"><button data-act="backrecipe">← Ricette</button></div><div class="redit"><div class="rleft">'
+  return'<div class="bar"><button data-act="backrecipe">← '+(route.from?{marginalita:'Marginalità',menu:'Menu engineering'}[route.from]:'Ricette')+'</button></div><div class="redit"><div class="rleft">'
   +'<label>Nome piatto *<input value="'+esc(r.name)+'" oninput="route.recipe.name=this.value" placeholder="es. Calzone"></label>'
   +'<div class="grid2"><label>Tipologia<select onchange="route.recipe.type=this.value"><option value="">—</option>'+S.lists.tipologie.map(function(c){return'<option'+(r.type===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select></label>'
   +'<label>Dosi (porzioni della ricetta)<input type="number" inputmode="decimal" value="'+esc(r.portions)+'" oninput="route.recipe.portions=this.value;recalc()"></label></div>'
@@ -542,7 +545,7 @@ function margHTML(){
   return'<p class="mut" style="margin:0 0 6px">Inserisci il prezzo di vendita IVA inclusa: food cost e margini si calcolano da soli. Il food cost è verde fino al '+S.fcTarget+'%, arancione fino a +5 punti, poi rosso.</p>'
   +groups().map(function(g,gi){
     return'<h2 class="gh">'+esc(g.t)+'</h2><div class="card mt m6"><div class="thead"><span>Piatto</span><div><span>Prezzo IVA incl.</span><span>IVA escl.</span><span>Food cost dose</span><span>Food cost %</span><span>Margine €</span><span>Margine %</span></div></div>'+g.rs.map(function(r){
-      return'<div class="mrow"><div class="mname"><div class="mh"><b>'+esc(r.name)+'</b><span class="mut warn" id="mw-'+r.id+'"></span></div></div>'
+      return'<div class="mrow"><div class="mname"><div class="mh"><b class="rlink" data-act="openrecipe" data-id="'+r.id+'" title="Apri la ricetta">'+esc(r.name)+'</b><span class="mut warn" id="mw-'+r.id+'"></span></div></div>'
       +'<div class="kgrid"><label><span class="kl">Prezzo IVA incl. €</span><input type="number" inputmode="decimal" step="0.01" value="'+esc(r.price||'')+'" oninput="setPrice(\''+r.id+'\',this.value)"></label>'
       +'<div class="kv"><span class="kl">Prezzo IVA escl.</span><b id="mn-'+r.id+'"></b></div><div class="kv"><span class="kl">Food cost dose</span><b id="mf-'+r.id+'"></b></div>'
       +'<div class="kv"><span class="kl">Food cost %</span><b id="mp-'+r.id+'"></b></div><div class="kv"><span class="kl">Margine €</span><b id="mg-'+r.id+'"></b></div><div class="kv"><span class="kl">Margine %</span><b id="mq-'+r.id+'"></b></div></div></div>';
@@ -579,7 +582,7 @@ function menuHTML(){
   +'<p><b>Fuoriclasse</b>: vende e rende sopra media. <b>Instancabili</b>: vende molto, rende poco. <b>Diamanti grezzi</b>: rende ma vende poco. <b>Rami secchi</b>: né l’uno né l’altro. “Veloci” = tempo sotto la media della categoria.</p><p>Nel <b>grafico</b> ogni puntino è un piatto: più è a destra più guadagni per piatto, più è in alto più ne vendi. Le linee tratteggiate sono le medie della categoria.</p></details>'
   +groups().map(function(g,gi){
     return'<h2 class="gh">'+esc(g.t)+'</h2><div class="card mt m9"><div class="qchart" id="qc-'+gi+'"></div><div class="thead"><span>Piatto</span><div><span>Venduto</span><span>Tempo min</span><span>Margine €</span><span>Margine %</span><span>Moltipl.</span><span>Incasso</span><span>Food cost tot.</span><span>Margine tot.</span><span>% su categ.</span></div></div>'+g.rs.map(function(r){
-      return'<div class="mrow"><div class="mname"><div class="mh"><b>'+esc(r.name)+'</b><span class="badge" id="bd-'+r.id+'"></span></div><div class="mut" id="bh-'+r.id+'" style="margin-top:2px"></div></div>'
+      return'<div class="mrow"><div class="mname"><div class="mh"><b class="rlink" data-act="openrecipe" data-id="'+r.id+'" title="Apri la ricetta">'+esc(r.name)+'</b><span class="badge" id="bd-'+r.id+'"></span></div><div class="mut" id="bh-'+r.id+'" style="margin-top:2px"></div></div>'
       +'<div class="kgrid"><label><span class="kl">Venduto (n.)</span><input type="number" inputmode="numeric" value="'+esc(r.sold||'')+'" oninput="setMenu(\''+r.id+'\',\'sold\',this.value)"></label>'
       +'<label><span class="kl">Tempo prep.+serv. (min)</span><input type="number" inputmode="decimal" value="'+esc(r.time||'')+'" oninput="setMenu(\''+r.id+'\',\'time\',this.value)"></label>'
       +'<div class="kv"><span class="kl">Margine € (netto)</span><b id="xg-'+r.id+'"></b></div>'
@@ -822,7 +825,7 @@ function recipeOut(r){return{name:r.name.trim(),type:r.type||'',portions:r.porti
 function armed(t,label){if(t.dataset.armed)return true;t.dataset.armed='1';t.textContent=label;return false}
 document.addEventListener('click',function(e){
   var t=e.target.closest('[data-tab],[data-act]');if(!t)return;
-  if(t.dataset.tab){route.tab=t.dataset.tab;route.recipe=null;route.food=null;route.cat='';route.q='';if(route.tab==='clienti'){ADM&&(ADM.msg='');ADM=null}render();window.scrollTo(0,0);return}
+  if(t.dataset.tab){route.tab=t.dataset.tab;route.recipe=null;route.from=null;route.food=null;route.cat='';route.q='';if(route.tab==='clienti'){ADM&&(ADM.msg='');ADM=null}render();window.scrollTo(0,0);return}
   var a=t.dataset.act,id=t.dataset.id;
   /* clic sullo sfondo scuro di una scheda: chiude solo se non si è cliccato dentro la scheda */
   if(a==='closebg'){if(e.target!==t)return;if(route.pw){if(!route.pw.forced)route.pw=null}else{route.food=null;route.bulk=null}render();return}
@@ -886,7 +889,8 @@ document.addEventListener('click',function(e){
   else if(a==='delfood'){if(armed(t,'Tocca ancora per eliminare'))busy(t,api('DELETE','/foods/'+route.food.id,{})).then(function(){route.food=null;return reload()}).catch(showErr)}
   else if(a==='newrecipe'){var lr=lockRecipe();if(lr){showLock(lr);return}route.recipe={id:uid(),isNew:true,name:'',type:'',portions:1,yieldG:'',price:'',rows:[{foodId:'',subId:'',name:'',qty:'',waste:''}]};render();window.scrollTo(0,0)}
   else if(a==='editrecipe'){route.recipe=clone(recipeById(id));render();window.scrollTo(0,0)}
-  else if(a==='backrecipe'){route.recipe=null;render()}
+  else if(a==='backrecipe'){closeRecipe();render()}
+  else if(a==='openrecipe'){var rr=recipeById(id);if(!rr)return;route.from=route.tab;route.fromY=window.scrollY;route.tab='ricette';route.q='';route.cat='';route.recipe=clone(rr);render();window.scrollTo(0,0)}
   else if(a==='addrow'){route.recipe.rows.push({foodId:'',subId:'',name:'',qty:'',waste:''});render();
     var inp=document.querySelectorAll('.ing .top input');if(inp.length)inp[inp.length-1].focus()}
   else if(a==='delrow'){route.recipe.rows.splice(+t.dataset.i,1);render()}
@@ -896,9 +900,9 @@ document.addEventListener('click',function(e){
     var ro=recipeOut(r),req;
     if(a==='dupl'){var ld=lockRecipe();if(ld){err2.textContent=ld;return}ro.name=ro.name+' (copia)';req=api('POST','/recipes',ro)}
     else req=r.isNew?api('POST','/recipes',ro):api('PUT','/recipes/'+r.id,ro);
-    busy(t,req).then(function(){route.recipe=null;return reload()}).catch(function(x){err2.textContent=x.message});
+    busy(t,req).then(function(){closeRecipe();return reload()}).catch(function(x){err2.textContent=x.message});
   }
-  else if(a==='delrecipe'){if(armed(t,'Tocca ancora per eliminare'))busy(t,api('DELETE','/recipes/'+route.recipe.id,{})).then(function(){route.recipe=null;return reload()}).catch(showErr)}
+  else if(a==='delrecipe'){if(armed(t,'Tocca ancora per eliminare'))busy(t,api('DELETE','/recipes/'+route.recipe.id,{})).then(function(){closeRecipe();return reload()}).catch(showErr)}
   else if(a==='addlist'){var k=t.dataset.k,v=val('add-'+k).trim();if(v&&S.lists[k].indexOf(v)<0)busy(t,api('POST','/lists',{kind:k,value:v})).then(reload).catch(showErr)}
   else if(a==='dellist'){busy(t,api('DELETE','/lists',{kind:t.dataset.k,value:S.lists[t.dataset.k][+t.dataset.i]})).then(reload).catch(showErr)}
   /* solo super admin (il server rifiuta comunque chiunque altro) */
@@ -912,6 +916,10 @@ document.addEventListener('click',function(e){
   }
   else if(a==='reseed'){if(armed(t,'Tocca ancora per sostituire tutto'))busy(t,api('POST','/admin/seed',{tenant:CUR})).then(reload).then(function(){toast('Dati di test caricati.')}).catch(showErr)}
 });
+function closeRecipe(){
+  route.recipe=null;
+  if(route.from){route.tab=route.from;route.from=null;route.restoreY=route.fromY||0}
+}
 function msg(m){var e=document.getElementById('bkmsg');if(e)e.textContent=m}
 boot();
 </script>
