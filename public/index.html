@@ -6,10 +6,10 @@
 <title>Food Cost</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23b4482b'/%3E%3Ctext x='32' y='43' font-family='Georgia,serif' font-size='30' font-weight='700' fill='white' text-anchor='middle'%3EFC%3C/text%3E%3C/svg%3E">
 <style>
-:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+:root{--q1:#18764a;--q2:#d98b16;--q3:#3c6ebe;--q4:#c0392b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
 --bg:#f6f4ef;--card:#ffffff;--ink:#1f2421;--mut:#6b726d;--line:#e3e0d6;--acc:#b4482b;--acc-ink:#fff;--ok:#2f6b4f;--warn:#b7791f;--bad:#b3261e;--chip:#efece3}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171a18;--card:#212523;--ink:#ecebe6;--mut:#9aa19c;--line:#353a37;--acc:#e0704f;--acc-ink:#1a1a1a;--ok:#5fb28a;--warn:#e0b050;--bad:#f2857d;--chip:#2b302d}}
-:root[data-theme="dark"]{--bg:#171a18;--card:#212523;--ink:#ecebe6;--mut:#9aa19c;--line:#353a37;--acc:#e0704f;--acc-ink:#1a1a1a;--ok:#5fb28a;--warn:#e0b050;--bad:#f2857d;--chip:#2b302d}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--q1:#257d4f;--q2:#b8843a;--q3:#6090dc;--q4:#de625b;--bg:#171a18;--card:#212523;--ink:#ecebe6;--mut:#9aa19c;--line:#353a37;--acc:#e0704f;--acc-ink:#1a1a1a;--ok:#5fb28a;--warn:#e0b050;--bad:#f2857d;--chip:#2b302d}}
+:root[data-theme="dark"]{--q1:#257d4f;--q2:#b8843a;--q3:#6090dc;--q4:#de625b;--bg:#171a18;--card:#212523;--ink:#ecebe6;--mut:#9aa19c;--line:#353a37;--acc:#e0704f;--acc-ink:#1a1a1a;--ok:#5fb28a;--warn:#e0b050;--bad:#f2857d;--chip:#2b302d}
 html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;min-height:100%;padding-bottom:84px}
@@ -110,6 +110,21 @@ details.tc{background:var(--card);border:1px solid var(--line);border-radius:14p
 details.tc summary{cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center;list-style:none}
 details.tc summary::-webkit-details-marker{display:none}
 .sm-list{font-size:13px;color:var(--mut);margin:6px 0}
+/* grafico a quadranti del menu engineering */
+.qchart{position:relative;margin:2px 0 10px}
+.qchart svg{width:100%;height:auto;display:block;overflow:visible}
+.qchart .ax{stroke:var(--line);stroke-width:1}
+.qchart .avgl{stroke:var(--mut);stroke-width:1;stroke-dasharray:4 4}
+.qchart text{fill:var(--mut);font-size:10px;font-family:inherit}
+.qchart .ql{font-size:10px;font-weight:700;letter-spacing:.04em}
+.qchart .dot{stroke:var(--card);stroke-width:2}
+.qchart .qhit{fill:transparent;cursor:pointer}
+.qchart .dot.on{stroke:var(--ink)}
+.qtip{position:absolute;display:none;pointer-events:none;background:var(--ink);color:var(--bg);border-radius:8px;padding:6px 9px;font-size:12px;line-height:1.35;white-space:nowrap;z-index:3;transform:translate(-50%,calc(-100% - 10px))}
+.qleg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--mut);margin-top:4px}
+.qleg span{display:inline-flex;align-items:center;gap:5px}
+.qleg i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.qnote{font-size:12px;color:var(--mut);padding:6px 0 10px}
 </style>
 </head>
 <body>
@@ -490,9 +505,9 @@ function classify(x,aJ,aG,aK){
 function menuHTML(){
   if(!S.recipes.length)return'<div class="empty">Nessuna ricetta.<br>Creale nella sezione Ricette.</div>';
   return'<details class="lg"><summary>Come si legge</summary><p>Ogni piatto è confrontato con la <b>media della sua categoria</b> su tre aspetti: vendite (popolarità), margine in € (profittabilità) e tempo di preparazione. Il prezzo si inserisce in Marginalità.</p>'
-  +'<p><b>Fuoriclasse</b>: vende e rende sopra media. <b>Instancabili</b>: vende molto, rende poco. <b>Diamanti grezzi</b>: rende ma vende poco. <b>Rami secchi</b>: né l’uno né l’altro. “Veloci” = tempo sotto la media della categoria.</p></details>'
+  +'<p><b>Fuoriclasse</b>: vende e rende sopra media. <b>Instancabili</b>: vende molto, rende poco. <b>Diamanti grezzi</b>: rende ma vende poco. <b>Rami secchi</b>: né l’uno né l’altro. “Veloci” = tempo sotto la media della categoria.</p><p>Nel <b>grafico</b> ogni puntino è un piatto: più è a destra più guadagni per piatto, più è in alto più ne vendi. Le linee tratteggiate sono le medie della categoria.</p></details>'
   +groups().map(function(g,gi){
-    return'<h2 class="gh">'+esc(g.t)+'</h2><div class="card">'+g.rs.map(function(r){
+    return'<h2 class="gh">'+esc(g.t)+'</h2><div class="card"><div class="qchart" id="qc-'+gi+'"></div>'+g.rs.map(function(r){
       return'<div class="mrow"><div class="mh"><b>'+esc(r.name)+'</b><span class="badge" id="bd-'+r.id+'"></span></div><div class="mut" id="bh-'+r.id+'" style="margin-top:2px"></div>'
       +'<div class="kgrid"><label>Venduto (n.)<input type="number" inputmode="numeric" value="'+esc(r.sold||'')+'" oninput="setMenu(\''+r.id+'\',\'sold\',this.value)"></label>'
       +'<label>Tempo prep.+serv. (min)<input type="number" inputmode="decimal" value="'+esc(r.time||'')+'" oninput="setMenu(\''+r.id+'\',\'time\',this.value)"></label>'
@@ -502,6 +517,57 @@ function menuHTML(){
     }).join('')+'<div class="avg" id="xa-'+gi+'"></div></div>';
   }).join('');
 }
+/* grafico: margine € in orizzontale, venduto in verticale, linee alle medie della categoria */
+var QUAD={'++':['Fuoriclasse','--q1'],'+-':['Instancabili','--q2'],'-+':['Diamanti grezzi','--q3'],'--':['Rami secchi','--q4']};
+function drawQuadrant(gi,it,aJ,aG,aK){
+  var el=document.getElementById('qc-'+gi);if(!el)return;
+  if(it.length<2){el.innerHTML='<div class="qnote">Il grafico compare quando almeno 2 piatti della categoria hanno prezzo e venduto.</div>';return}
+  var W=340,H=250,L=38,R=10,T=14,B=34,pw=W-L-R,ph=H-T-B;
+  var mgs=it.map(function(x){return x.mg}),sds=it.map(function(x){return x.sold});
+  // l'asse del margine si adatta ai piatti (non parte per forza da 0), con un po' di aria ai lati
+  var mn=Math.min.apply(null,mgs.concat([aG])),mx=Math.max.apply(null,mgs.concat([aG])),pad=Math.max((mx-mn)*0.12,0.5);
+  var x0=Math.max(Math.min(0,mn),mn-pad),x1=mx+pad,y1=Math.max.apply(null,sds)*1.12||1;
+  var X=function(v){return L+(v-x0)/(x1-x0)*pw},Y=function(v){return T+ph-v/y1*ph};
+  var ax=X(aG),ay=Y(aJ),h='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Grafico a quadranti: margine e venduto dei piatti">';
+  h+='<line class="ax" x1="'+L+'" y1="'+(T+ph)+'" x2="'+(L+pw)+'" y2="'+(T+ph)+'"/><line class="ax" x1="'+L+'" y1="'+T+'" x2="'+L+'" y2="'+(T+ph)+'"/>';
+  h+='<line class="avgl" x1="'+ax+'" y1="'+T+'" x2="'+ax+'" y2="'+(T+ph)+'"/><line class="avgl" x1="'+L+'" y1="'+ay+'" x2="'+(L+pw)+'" y2="'+ay+'"/>';
+  // nomi dei quadranti negli angoli (l'informazione non sta solo nel colore)
+  h+='<text class="ql" x="'+(L+pw-2)+'" y="'+(T+10)+'" text-anchor="end" style="fill:var(--q1)">FUORICLASSE</text>'
+    +'<text class="ql" x="'+(L+4)+'" y="'+(T+10)+'" style="fill:var(--q2)">INSTANCABILI</text>'
+    +'<text class="ql" x="'+(L+pw-2)+'" y="'+(T+ph-5)+'" text-anchor="end" style="fill:var(--q3)">DIAMANTI GREZZI</text>'
+    +'<text class="ql" x="'+(L+4)+'" y="'+(T+ph-5)+'" style="fill:var(--q4)">RAMI SECCHI</text>';
+  // assi: poche etichette
+  h+='<text x="'+L+'" y="'+(T+ph+13)+'" text-anchor="middle">'+eur(x0,0)+'</text><text x="'+ax+'" y="'+(T+ph+13)+'" text-anchor="middle">media '+eur(aG)+'</text>'
+    +'<text x="'+(L+pw)+'" y="'+(T+ph+13)+'" text-anchor="end">'+eur(x1,0)+'</text>'
+    +'<text x="'+(L+pw/2)+'" y="'+(H-3)+'" text-anchor="middle">Margine € per piatto →</text>'
+    +'<text x="'+(L-5)+'" y="'+(T+ph)+'" text-anchor="end" dy="3">0</text><text x="'+(L-5)+'" y="'+ay+'" text-anchor="end" dy="3">'+Math.round(aJ)+'</text>'
+    +'<text x="'+(L-5)+'" y="'+(T+6)+'" text-anchor="end">'+Math.round(y1)+'</text>'
+    +'<text transform="translate(10 '+(T+ph/2)+') rotate(-90)" text-anchor="middle">Venduto (n.) →</text>';
+  var dots='',hits='';
+  it.forEach(function(x,i){
+    var k=(x.sold<aJ?'-':'+')+(x.mg<aG?'-':'+'),q=QUAD[k],fast=x.tm>0&&x.tm<aK,cx=X(x.mg).toFixed(1),cy=Y(x.sold).toFixed(1);
+    dots+='<circle class="dot" id="qd-'+gi+'-'+i+'" cx="'+cx+'" cy="'+cy+'" r="5.5" style="fill:var('+q[1]+')"/>';
+    hits+='<circle class="qhit" cx="'+cx+'" cy="'+cy+'" r="13" data-d="qd-'+gi+'-'+i+'" data-n="'+esc(x.r.name)+'" data-t="'+esc(q[0]+(fast?' veloci':''))+'" data-m="'+esc(eur(x.mg))+'" data-s="'+Math.round(x.sold)+'"/>';
+  });
+  h+=dots+hits+'</svg><div class="qtip"></div><div class="qleg">'
+    +['--q1','--q2','--q3','--q4'].map(function(c,i){return'<span><i style="background:var('+c+')"></i>'+['Fuoriclasse','Instancabili','Diamanti grezzi','Rami secchi'][i]+'</span>'}).join('')
+    +'<span class="mut">tocca un puntino per il nome</span></div>';
+  el.innerHTML=h;
+}
+function qTip(e){
+  var w=e.target.closest&&e.target.closest('.qchart');
+  document.querySelectorAll('.qchart .dot.on').forEach(function(d){d.classList.remove('on')});
+  document.querySelectorAll('.qtip').forEach(function(t){if(!w||t.parentNode!==w)t.style.display='none'});
+  if(!w)return;
+  var c=e.target.closest('.qhit'),tip=w.querySelector('.qtip');if(!tip)return;
+  if(!c){tip.style.display='none';return}
+  var d=document.getElementById(c.dataset.d);if(d)d.classList.add('on');
+  tip.innerHTML='<b>'+esc(c.dataset.n)+'</b><br>'+esc(c.dataset.t)+'<br>Margine '+esc(c.dataset.m)+' · Venduto '+esc(c.dataset.s);
+  var wb=w.getBoundingClientRect(),cb=c.getBoundingClientRect(),left=cb.left+cb.width/2-wb.left;
+  tip.style.display='block';tip.style.top=(cb.top+cb.height/2-wb.top)+'px';
+  tip.style.left=Math.max(70,Math.min(wb.width-70,left))+'px';
+}
+document.addEventListener('mouseover',qTip);document.addEventListener('click',qTip);
 function avgOf(a){return a.length?a.reduce(function(s,v){return s+v},0)/a.length:0}
 function paintMenu(){
   groups().forEach(function(g,gi){
@@ -522,6 +588,7 @@ function paintMenu(){
       setT('xi-'+id,has&&x.sold>0?eur(x.net*x.sold):'—');setT('xf-'+id,has&&x.sold>0?eur(x.fc*x.sold):'—');
       setT('xt-'+id,has&&x.sold>0?eur(x.mg*x.sold):'—');setT('xs-'+id,has&&x.sold>0&&tMg>0?pct(x.mg*x.sold/tMg):'—');
     });
+    drawQuadrant(gi,ok.filter(function(x){return x.sold>0}),aJ,aG,aK);
     setT('xa-'+gi,ok.length?'Medie · venduto '+aJ.toFixed(0)+' · margine '+eur(aG)+(aK?' · tempo '+aK.toFixed(1).replace('.',',')+' min':'')+'  |  Totali · incasso '+eur(tInc)+' · food cost '+eur(tFc)+' · margine '+eur(tMg):'Inserisci i prezzi in Marginalità per vedere medie e totali');
   });
 }
