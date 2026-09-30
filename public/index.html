@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Food Cost</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23b4482b'/%3E%3Ctext x='32' y='43' font-family='Georgia,serif' font-size='30' font-weight='700' fill='white' text-anchor='middle'%3EFC%3C/text%3E%3C/svg%3E">
 <style>
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
 --bg:#f6f4ef;--card:#ffffff;--ink:#1f2421;--mut:#6b726d;--line:#e3e0d6;--acc:#b4482b;--acc-ink:#fff;--ok:#2f6b4f;--warn:#b7791f;--bad:#b3261e;--chip:#efece3}
@@ -82,57 +83,110 @@ nav button{font-size:12px}
 details.lg{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:10px;font-size:13px}
 details.lg summary{cursor:pointer;font-weight:600}
 details.lg p{margin:6px 0 0}
+/* multi-cliente */
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+#top{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+#top select{width:auto;max-width:230px;min-height:34px;padding:4px 8px;font-size:13px}
+.role{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--chip);color:var(--mut);font-weight:600}
+body:not(.authed) nav{display:none}
+.auth{max-width:420px;margin:24px auto 0}
+.auth h2{font-size:20px;margin-bottom:12px}
+.link{background:none;padding:6px 0;color:var(--acc);min-height:0;text-decoration:underline}
+.info{background:rgba(47,107,79,.12);color:var(--ok);border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:10px}
+.counter{font-size:13px;color:var(--mut);margin:-4px 0 10px}
+.counter b{color:var(--ink)}.counter.full b{color:var(--bad)}
+button.locked{opacity:.5}
+.lockmsg{background:rgba(179,38,30,.1);color:var(--bad);border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:10px}
+.lockmsg:empty{display:none}
+input:disabled,select:disabled,textarea:disabled{opacity:1;color:var(--ink);background:var(--chip);-webkit-text-fill-color:var(--ink)}
+#toast{position:fixed;left:50%;bottom:74px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:20;max-width:90%;display:none}
+.adm .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.adm .row>*{flex:1;min-width:130px}
+.chk{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);margin:6px 0}
+.chk input{width:auto;min-height:0}
+.tmp{background:rgba(183,121,31,.14);border:1px solid var(--warn);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:14px}
+.tmp code{font-size:17px;font-weight:700;letter-spacing:.05em;user-select:all}
+details.tc{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 14px;margin-bottom:10px}
+details.tc summary{cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center;list-style:none}
+details.tc summary::-webkit-details-marker{display:none}
+.sm-list{font-size:13px;color:var(--mut);margin:6px 0}
 </style>
 </head>
 <body>
-<header><h1>Food Cost</h1><p id="sub"></p></header>
+<header><div class="topbar"><h1>Food Cost</h1><div id="top"></div></div><p id="sub"></p></header>
 <main id="app"></main>
 <div id="sheet"></div>
+<div id="toast"></div>
 <nav><div class="in">
   <button data-tab="alimenti">Alimenti</button>
   <button data-tab="ricette">Ricette</button>
   <button data-tab="marginalita">Marginalità</button>
   <button data-tab="menu">Menu eng.</button>
   <button data-tab="dati">Dati</button>
+  <button data-tab="clienti" id="nav-clienti" hidden>Clienti</button>
 </div></nav>
 
 <script>
-var KEY='foodcost:v1';
-var DEF={foods:[],recipes:[],iva:10,fcTarget:30,tenant:{ragione:'',tipo:''},lists:{
-  reparti:['Crostacei','Carne','Cereali','Condimenti','Farine','Formaggi','Frutta','Latte e derivati','Legumi','Olii da condimento','Ortaggi','Pesci','Salumi','Tuberi','Uova','Verdure','Pasta','Spezie','Vini','Dolci'],
-  fornitori:[],
-  tipiAttivita:['Ristorante','Pizzeria','Ristorante-pizzeria','Pizzeria al taglio','Trattoria','Pub','Bar','Gelateria','Pasticceria','Panificio','Hotel / ristorante','Catering','Altro'],
-  tipologie:['INSALATONE','ANTIPASTI','PRIMI','SECONDI','CONTORNI','DOLCI','PIZZE BASILICO','PIZZE CLASSICHE','FOCACCE','PIZZE SEMPLICI','I NS FRITTI','PREPARATI','FUORI MENU']}};
-var S=load();
-var route={tab:'alimenti',q:'',cat:'',food:null,recipe:null};
+/* ---------- stato: i dati arrivano dal server (nessun salvataggio nel browser) ---------- */
+var ME=null;      // utente collegato e attività a cui ha accesso (/api/me)
+var CUR=null;     // id dell'attività su cui si sta lavorando
+var S=null;       // dati dell'attività corrente (/api/data)
+var RO=true;      // sola lettura
+var ADM=null;     // dati del pannello clienti (solo super admin)
+var route={tab:'alimenti',q:'',cat:'',food:null,recipe:null,auth:'login',pw:null};
+var LIMIT_BASIC='Hai raggiunto il limite del piano base. Contatta l\'amministratore per ampliarlo.';
+var LIMIT_OTHER='Hai raggiunto il limite di ricette del tuo piano. Contatta l\'amministratore per ampliarlo.';
 
-/* ---------- dati di test (presi dal file Excel: prezzi del 12/06/2026 e quantità delle ricette) ---------- */
-function buildSeed(){
-  var F=[['pomodorini','Ortaggi',3.59],['mozzarella cucina','Formaggi',6.5],['carote','Ortaggi',1.39],['mais','Verdure',4.23],['tonno','Pesci',6.85],['insalata','Verdure',11.47],
-    ['bresaola','Salumi',26.08],['rucola','Verdure',7.92],['grana a scaglie','Formaggi',13.5],['mandilli','Pasta',3.39],['pesto','Condimenti',20.83],['pollo','Carne',10.9],
-    ['melanzane','Ortaggi',2.2],['zucchine','Ortaggi',1.28],['peperoni','Ortaggi',2.49],['mozzarella di bufala','Formaggi',9.9],['burrata','Formaggi',12.49],['prosciutto crudo','Salumi',17.89]];
-  var foods=F.map(function(x){return{id:uid(),name:x[0],category:x[1],supplier:'',unit:'kg',mode:'max',packQty:'',packUnit:'g',history:[{id:uid(),date:'2026-06-12',price:x[2]}]}});
-  function id(n){return foods.filter(function(f){return f.name===n})[0].id}
-  function R(name,type,ing){return{id:uid(),name:name,type:type,portions:1,price:'',rows:ing.map(function(i){return{foodId:id(i[0]),name:i[0],qty:i[1],waste:''}})}}
-  var recipes=[
-    R('CLASSICA','INSALATONE',[['pomodorini',50],['mozzarella cucina',50],['carote',10],['mais',25],['tonno',40],['insalata',40]]),
-    R('BRESAOLA RUCOLA E GRANA','ANTIPASTI',[['bresaola',100],['rucola',25],['grana a scaglie',20]]),
-    R('CRUDO E BUFALA','ANTIPASTI',[['prosciutto crudo',100],['mozzarella di bufala',125]]),
-    R('MANDILLI AL PESTO','PRIMI',[['mandilli',150],['pesto',70]]),
-    R('FILETTO DI POLLO','SECONDI',[['pollo',200],['rucola',20],['grana a scaglie',40],['pomodorini',40]]),
-    R('VERDURE GRIGLIATE','CONTORNI',[['melanzane',75],['zucchine',50],['peperoni',100]])];
-  return{foods:foods,recipes:recipes};
+function isSuper(){return !!(ME&&ME.user.role==='super_admin')}
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{if(v==null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){}}
+
+/* tutte le chiamate al server; le rotte dei dati portano l'attività scelta, che il server verifica */
+function api(method,path,body){
+  var url='/api'+path;
+  if(CUR&&/^\/(data|tenant|lists|foods|recipes)/.test(path))url+=(url.indexOf('?')>=0?'&':'?')+'tenant='+encodeURIComponent(CUR);
+  var o={method:method,credentials:'same-origin',headers:{}};
+  if(body!==undefined){o.headers['content-type']='application/json';o.body=JSON.stringify(body)}
+  return fetch(url,o).then(function(res){
+    return res.text().then(function(t){
+      var d=null;try{d=t?JSON.parse(t):null}catch(e){}
+      if(res.ok)return d;
+      var err={status:res.status,code:d&&d.error,message:(d&&d.message)||'Errore di rete. Riprova.'};
+      if(res.status===401&&path!=='/login'&&path!=='/me'){ME=null;S=null;route.auth='login';route.authMsg=err.message;render()}
+      throw err;
+    });
+  },function(){throw{status:0,message:'Connessione assente. Riprova.'}});
 }
-var TEST={'CLASSICA':[10,106,8],'BRESAOLA RUCOLA E GRANA':[12,60,5],'CRUDO E BUFALA':[13,45,4],'MANDILLI AL PESTO':[11,90,10],'FILETTO DI POLLO':[14,40,15],'VERDURE GRIGLIATE':[6,70,12]};
-function addTest(rs,onlyEmpty){rs.forEach(function(r){var x=TEST[r.name];if(!x)return;if(onlyEmpty&&(r.price||r.sold||r.time))return;r.price=x[0];r.sold=x[1];r.time=x[2]})}
-function applySeed(){var d=buildSeed();addTest(d.recipes,false);S.foods=d.foods;S.recipes=d.recipes;S.lists=clone(DEF.lists);S.seeded=true;S.seedVer=2;save()}
-if(!S.seeded&&!S.foods.length&&!S.recipes.length)applySeed();
-if(S.seeded&&S.seedVer!==2){addTest(S.recipes,true);S.seedVer=2;save()}
+function toast(m){var e=document.getElementById('toast');e.textContent=m;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(function(){e.style.display='none'},3500)}
+function showErr(e){toast((e&&e.message)||'Errore')}
+var timers={};
+function later(key,fn,ms){clearTimeout(timers[key]);timers[key]=setTimeout(fn,ms||500)}
+
+function loadData(){
+  if(!CUR){S=null;RO=true;return Promise.resolve()}
+  return api('GET','/data').then(function(d){S=d;RO=!d.canWrite})
+    .catch(function(e){if(e.status===403||e.status===404){CUR=null;lsSet('fc:tenant',null);S=null;return}throw e});
+}
+function boot(){
+  return api('GET','/me').then(function(m){
+    ME=m;
+    var ids=m.tenants.map(function(t){return t.id}),saved=lsGet('fc:tenant');
+    if(CUR&&ids.indexOf(CUR)<0)CUR=null;
+    if(!CUR)CUR=ids.indexOf(saved)>=0?saved:(!isSuper()&&m.tenants.length?m.tenants[0].id:null);
+    if(isSuper()&&!CUR)route.tab='clienti';
+    if(m.user.mustChangePw)route.pw={forced:true};
+    return loadData();
+  }).then(render).catch(function(e){ME=null;if(e.status!==401)route.authMsg=e.message;render()});
+}
+function refreshMe(){return api('GET','/me').then(function(m){ME=m;renderTop()})}
+function switchTenant(id){
+  CUR=id||null;lsSet('fc:tenant',CUR);route.food=null;route.recipe=null;route.q='';route.cat='';
+  if(CUR&&route.tab==='clienti')route.tab='alimenti';
+  loadData().then(render).catch(showErr);
+}
+function reload(){return loadData().then(render)}
 
 function clone(o){return JSON.parse(JSON.stringify(o))}
-function load(){try{var r=localStorage.getItem(KEY);if(r){var o=JSON.parse(r);var d=clone(DEF);for(var k in o)d[k]=o[k];return ensure(d)}}catch(e){}return clone(DEF)}
-function ensure(d){if(!d.lists)d.lists=clone(DEF.lists);for(var lk in DEF.lists)if(!d.lists[lk])d.lists[lk]=clone(DEF.lists[lk]);if(!d.tenant)d.tenant={ragione:'',tipo:''};if(!d.fcTarget)d.fcTarget=30;if(!d.iva)d.iva=10;if(!d.foods)d.foods=[];if(!d.recipes)d.recipes=[];return d}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function uid(){return Math.random().toString(36).slice(2,9)}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function num(v){var n=parseFloat(String(v).replace(',','.'));return isNaN(n)?0:n}
@@ -162,51 +216,106 @@ function unitInfo(f){
   if(pu==='ml')return{basis:'volume',perBase:per,label:'/lt',disp:per*1000};
   return{basis:'piece',perBase:per,label:'/pz',disp:per};
 }
-var BASEU={mass:'g',volume:'ml',piece:'pz'};
+var BASEU={mass:'g',volume:'ml',piece:'pz',dose:'dosi'};
 function foodByName(n){n=String(n).trim().toLowerCase();return S.foods.filter(function(f){return f.name.trim().toLowerCase()===n})[0]}
 function foodById(id){return S.foods.filter(function(f){return f.id===id})[0]}
 
 /* ---------- calcoli ricette ---------- */
-function rowCost(r){
-  var f=foodById(r.foodId);if(!f)return null;
-  var ui=unitInfo(f);if(!ui)return null;
+function recipeById(id){return S.recipes.filter(function(r){return r.id===id})[0]}
+/* una ricetta usata come ingrediente: costo al grammo se ha la resa in grammi, altrimenti costo per dose */
+function subInfo(rc,stack){
+  var t=recipeTotal(rc,stack);if(!(t.total>0))return null;
+  var y=num(rc.yieldG);
+  if(y>0)return{basis:'mass',perBase:t.total/y,label:'/kg',disp:t.total/y*1000,sub:true};
+  var d=num(rc.portions)>0?num(rc.portions):1;
+  return{basis:'dose',perBase:t.total/d,label:'/dose',disp:t.total/d,sub:true};
+}
+function rowInfo(r,stack){
+  stack=stack||[];
+  if(r.subId){var sr=recipeById(r.subId);if(!sr||stack.indexOf(sr.id)>=0)return null;return subInfo(sr,stack.concat(sr.id))}
+  var f=foodById(r.foodId);return f?unitInfo(f):null;
+}
+function rowCost(r,stack){
+  var ui=rowInfo(r,stack);if(!ui)return null;
   var w=Math.min(Math.max(num(r.waste),0),99.9);
   return num(r.qty)*ui.perBase/(1-w/100);
 }
-function recipeTotal(rc){var t=0,miss=0;rc.rows.forEach(function(r){if(!r.foodId&&!r.name)return;var c=rowCost(r);if(c==null)miss++;else t+=c});return{total:t,miss:miss}}
+function recipeTotal(rc,stack){stack=stack||[rc.id];var t=0,miss=0;rc.rows.forEach(function(r){if(!r.foodId&&!r.subId&&!r.name)return;var c=rowCost(r,stack);if(c==null)miss++;else t+=c});return{total:t,miss:miss}}
 
 /* ---------- render ---------- */
 function render(){
+  document.body.classList.toggle('authed',!!ME);
+  if(!ME){renderAuth();return}
+  renderTop();
   document.querySelectorAll('nav button').forEach(function(b){b.classList.toggle('on',b.dataset.tab===route.tab&&!route.recipe)});
+  var nc=document.getElementById('nav-clienti');nc.hidden=!isSuper();
+  if(isSuper()){var pend=ME.tenants.filter(function(t){return t.status==='pending'}).length;nc.textContent='Clienti'+(pend?' ('+pend+')':'')}
   subt();
   var app=document.getElementById('app');
-  if(route.recipe)app.innerHTML=recipeEditorHTML();
+  if(route.tab==='clienti'&&isSuper())app.innerHTML=adminHTML();
+  else if(!S)app.innerHTML=isSuper()?'<div class="empty">Scegli un cliente dal selettore in alto<br>oppure dalla sezione Clienti.</div>':'<div class="empty">Nessuna attività assegnata al tuo account.<br>Contatta l\'amministratore.</div>';
+  else if(route.recipe)app.innerHTML=recipeEditorHTML();
   else if(route.tab==='alimenti')app.innerHTML=foodsHTML();
   else if(route.tab==='ricette')app.innerHTML=recipesHTML();
   else if(route.tab==='marginalita')app.innerHTML=margHTML();
   else if(route.tab==='menu')app.innerHTML=menuHTML();
   else app.innerHTML=datiHTML();
-  document.getElementById('sheet').innerHTML=route.food?foodSheetHTML():'';
-  if(route.recipe)recalc();
+  document.getElementById('sheet').innerHTML=route.pw?pwSheetHTML():(route.food&&S?foodSheetHTML():'');
+  if(!S||route.tab==='clienti'){}
+  else if(route.recipe)recalc();
   else if(route.tab==='marginalita')paintMarg();
   else if(route.tab==='menu')paintMenu();
+  applyRO();
 }
+/* sola lettura: nasconde i pulsanti di modifica e blocca i campi (il server rifiuta comunque ogni scrittura) */
+var WRITE=['newfood','savefood','delfood','addprice','delprice','newrecipe','saverecipe','dupl','delrecipe','addrow','delrow','addlist','dellist'];
+function applyRO(){
+  if(!RO||!S||route.tab==='clienti')return;
+  ['app'].concat(route.food&&!route.pw?['sheet']:[]).forEach(function(id){
+    var el=document.getElementById(id);
+    el.querySelectorAll('[data-act]').forEach(function(b){if(WRITE.indexOf(b.dataset.act)>=0)b.style.display='none'});
+    el.querySelectorAll('input,select,textarea').forEach(function(i){if(!i.hasAttribute('data-keep'))i.disabled=true});
+  });
+}
+var ROLES={super_admin:'Super admin',admin:'Amministratore',viewer:'Sola lettura'};
+var TSTAT={pending:'in attesa',approved:'attivo',suspended:'sospeso'};
+function renderTop(){
+  var el=document.getElementById('top');if(!ME){el.innerHTML='';return}
+  var h='';
+  if(isSuper()||ME.tenants.length>1){
+    h+='<select data-keep onchange="switchTenant(this.value)" aria-label="Cliente">'+(isSuper()||!CUR?'<option value="">— scegli cliente —</option>':'')
+      +ME.tenants.map(function(t){return'<option value="'+t.id+'"'+(t.id===CUR?' selected':'')+'>'+esc(t.ragione)+(t.status!=='approved'?' ('+TSTAT[t.status]+')':'')+'</option>'}).join('')+'</select>';
+  }
+  var role=isSuper()?'super_admin':(S?(S.canWrite?'admin':'viewer'):(ME.user.role==='viewer'?'viewer':'admin'));
+  h+='<span class="role" title="'+esc(ME.user.email)+'">'+ROLES[role]+'</span>'
+   +'<button class="sm" data-act="pwopen">Password</button><button class="sm" data-act="logout">Esci</button>';
+  el.innerHTML=h;
+}
+function lockFood(){if(!S||RO)return'Accesso in sola lettura.';if(S.isSuper||S.tenant.canAddFoods)return'';return'La creazione di alimenti non è abilitata per la tua attività. Contatta l\'amministratore.'}
+function lockRecipe(){
+  if(!S||RO)return'Accesso in sola lettura.';if(S.isSuper)return'';
+  if(!S.tenant.canAddRecipes)return'La creazione di ricette non è abilitata per la tua attività. Contatta l\'amministratore.';
+  if(S.tenant.maxRecipes!=null&&S.recipeCount>=S.tenant.maxRecipes)return S.tenant.plan==='basic'?LIMIT_BASIC:LIMIT_OTHER;
+  return'';
+}
+function showLock(m){var e=document.getElementById('lockmsg');if(e){e.textContent=m;e.scrollIntoView({block:'nearest'})}else toast(m)}
 
 /* ---------- ALIMENTI ---------- */
 function foodsHTML(){
   var q=route.q.toLowerCase();
   var list=S.foods.filter(function(f){return(!q||f.name.toLowerCase().indexOf(q)>=0||(f.supplier||'').toLowerCase().indexOf(q)>=0)&&(!route.cat||f.category===route.cat)})
     .sort(function(a,b){return a.name.localeCompare(b.name,'it')});
-  var h='<div class="bar"><input id="q" placeholder="Cerca alimento o fornitore" value="'+esc(route.q)+'" oninput="route.q=this.value;keepFocus(\'q\',foodsList)">'
-   +'<select onchange="route.cat=this.value;render()"><option value="">Tutti i reparti</option>'+S.lists.reparti.map(function(c){return'<option'+(route.cat===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select>'
-   +'<button class="pri" data-act="newfood">+ Alimento</button></div><div id="flist">'+foodsList()+'</div>';
+  var lk=lockFood();
+  var h='<div class="bar"><input id="q" data-keep placeholder="Cerca alimento o fornitore" value="'+esc(route.q)+'" oninput="route.q=this.value;keepFocus(\'q\',foodsList)">'
+   +'<select data-keep onchange="route.cat=this.value;render()"><option value="">Tutti i reparti</option>'+S.lists.reparti.map(function(c){return'<option'+(route.cat===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select>'
+   +'<button class="pri'+(lk?' locked':'')+'" data-act="newfood">+ Alimento</button></div><div id="lockmsg" class="lockmsg"></div><div id="flist">'+foodsList()+'</div>';
   return h;
 }
 function foodsList(){
   var q=route.q.toLowerCase();
   var list=S.foods.filter(function(f){return(!q||f.name.toLowerCase().indexOf(q)>=0||(f.supplier||'').toLowerCase().indexOf(q)>=0)&&(!route.cat||f.category===route.cat)})
     .sort(function(a,b){return a.name.localeCompare(b.name,'it')});
-  if(!S.foods.length)return'<div class="empty">Nessun alimento.<br>Tocca “+ Alimento” per inserire il primo.</div>';
+  if(!S.foods.length)return'<div class="empty">Nessun alimento.'+(RO?'':'<br>Tocca “+ Alimento” per inserire il primo.')+'</div>';
   if(!list.length)return'<div class="empty">Nessun risultato.</div>';
   return list.map(function(f){
     var ui=unitInfo(f);
@@ -219,8 +328,8 @@ function keepFocus(id,fn){var el=document.getElementById('flist')||document.getE
 function foodSheetHTML(){
   var f=route.food,st=stats(f),ui=unitInfo(f);
   var hist=(f.history||[]).slice().sort(function(a,b){return a.date<b.date?1:-1});
-  return'<div class="sheet-bg" data-act="closefood"><div class="sheet" onclick="event.stopPropagation()">'
-  +'<h2>'+(f.isNew?'Nuovo alimento':'Modifica alimento')+'</h2>'
+  return'<div class="sheet-bg" data-act="closebg"><div class="sheet">'
+  +'<h2>'+(f.isNew?'Nuovo alimento':(RO?'Alimento':'Modifica alimento'))+'</h2>'
   +'<label>Descrizione prodotto *<input value="'+esc(f.name)+'" oninput="route.food.name=this.value" placeholder="es. Mozzarella"></label>'
   +'<div class="grid2"><label>Reparto<select onchange="route.food.category=this.value"><option value="">—</option>'+S.lists.reparti.map(function(c){return'<option'+(f.category===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select></label>'
   +'<label>Fornitore (facoltativo)<input list="suppl" value="'+esc(f.supplier||'')+'" oninput="route.food.supplier=this.value"><datalist id="suppl">'+S.lists.fornitori.map(function(s){return'<option value="'+esc(s)+'">'}).join('')+'</datalist></label></div>'
@@ -235,20 +344,26 @@ function foodSheetHTML(){
   +hist.map(function(h){return'<div class="hist"><span>'+dIt(h.date)+'</span><span><b>'+eur(h.price)+'</b> <button class="sm del" data-act="delprice" data-id="'+h.id+'">✕</button></span></div>'}).join('')
   +(ui?'<p class="ok" style="margin:12px 0 0"><b>Costo usato nelle ricette: '+eur(ui.disp)+ui.label+'</b></p>':(f.unit==='conf'&&stats(f)?'<p class="warn">Indica la quantità della confezione.</p>':''))
   +'<p id="ferr" class="bad" style="margin:8px 0 0"></p>'
-  +'<div class="acts"><button class="pri" data-act="savefood">Salva</button><button data-act="closefood">Annulla</button>'+(f.isNew?'':'<button class="del" data-act="delfood">Elimina</button>')+'</div></div></div>';
+  +'<div class="acts"><button class="pri" data-act="savefood">Salva</button><button data-act="closefood">'+(RO?'Chiudi':'Annulla')+'</button>'+(f.isNew?'':'<button class="del" data-act="delfood">Elimina</button>')+'</div></div></div>';
 }
-function refreshSheet(){document.getElementById('sheet').innerHTML=route.food?foodSheetHTML():''}
+function refreshSheet(){document.getElementById('sheet').innerHTML=route.food?foodSheetHTML():'';applyRO()}
 
 /* ---------- RICETTE ---------- */
+function counterHTML(){
+  if(!S||RO)return'';var m=S.tenant.maxRecipes;
+  return'<div class="counter'+(m!=null&&S.recipeCount>=m?' full':'')+'">Ricette: <b>'+S.recipeCount+' / '+(m==null?'illimitate':m)+'</b> · piano '+(S.tenant.plan==='pro'?'Pro':'base')
+    +(S.isSuper&&m!=null&&S.recipeCount>=m?' · <span class="mut">come super admin puoi superare il limite</span>':'')+'</div>';
+}
 function recipesHTML(){
-  return'<div class="bar"><input id="q" placeholder="Cerca ricetta" value="'+esc(route.q)+'" oninput="route.q=this.value;document.getElementById(\'rlist\').innerHTML=recipesList()">'
-  +'<select onchange="route.cat=this.value;render()"><option value="">Tutte le tipologie</option>'+S.lists.tipologie.map(function(c){return'<option'+(route.cat===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select>'
-  +'<button class="pri" data-act="newrecipe">+ Ricetta</button></div><div id="rlist">'+recipesList()+'</div>';
+  var lk=lockRecipe();
+  return'<div class="bar"><input id="q" data-keep placeholder="Cerca ricetta" value="'+esc(route.q)+'" oninput="route.q=this.value;document.getElementById(\'rlist\').innerHTML=recipesList()">'
+  +'<select data-keep onchange="route.cat=this.value;render()"><option value="">Tutte le tipologie</option>'+S.lists.tipologie.map(function(c){return'<option'+(route.cat===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select>'
+  +'<button class="pri'+(lk?' locked':'')+'" data-act="newrecipe">+ Ricetta</button></div>'+counterHTML()+'<div id="lockmsg" class="lockmsg"></div><div id="rlist">'+recipesList()+'</div>';
 }
 function recipesList(){
   var q=route.q.toLowerCase();
   var list=S.recipes.filter(function(r){return(!q||r.name.toLowerCase().indexOf(q)>=0)&&(!route.cat||r.type===route.cat)}).sort(function(a,b){return a.name.localeCompare(b.name,'it')});
-  if(!S.recipes.length)return'<div class="empty">Nessuna ricetta.<br>Prima inserisci qualche alimento, poi tocca “+ Ricetta”.</div>';
+  if(!S.recipes.length)return'<div class="empty">Nessuna ricetta.'+(RO?'':'<br>Prima inserisci qualche alimento, poi tocca “+ Ricetta”.')+'</div>';
   if(!list.length)return'<div class="empty">Nessun risultato.</div>';
   return list.map(function(r){var t=recipeTotal(r),d=num(r.portions)||1;
     return'<div class="card item" data-act="editrecipe" data-id="'+r.id+'"><div><b>'+esc(r.name)+'</b><span class="badge">'+esc(r.type||'Senza tipologia')+'</span> <span class="mut">'+r.rows.length+' ingr.</span></div>'
@@ -260,47 +375,52 @@ function recipeEditorHTML(){
   +'<label>Nome piatto *<input value="'+esc(r.name)+'" oninput="route.recipe.name=this.value" placeholder="es. Calzone"></label>'
   +'<div class="grid2"><label>Tipologia<select onchange="route.recipe.type=this.value"><option value="">—</option>'+S.lists.tipologie.map(function(c){return'<option'+(r.type===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select></label>'
   +'<label>Dosi (porzioni della ricetta)<input type="number" inputmode="decimal" value="'+esc(r.portions)+'" oninput="route.recipe.portions=this.value;recalc()"></label></div>'
+  +'<label>Resa totale in grammi (facoltativa)<input type="number" inputmode="decimal" value="'+esc(r.yieldG||'')+'" oninput="route.recipe.yieldG=this.value;recalc()" placeholder="es. 1625 per un impasto"></label>'
+  +'<p class="mut" style="margin:-4px 0 10px">Serve se usi questa ricetta come ingrediente di altre (es. la pallina nelle pizze): con la resa la inserirai in grammi, senza resa in dosi.</p>'
   +'<h2 style="font-size:17px;margin:6px 0 10px">Ingredienti</h2>'
-  +'<datalist id="foodlist">'+S.foods.map(function(f){return'<option value="'+esc(f.name)+'">'}).join('')+'</datalist>'
+  +'<datalist id="foodlist">'+S.foods.map(function(f){return'<option value="'+esc(f.name)+'">'}).join('')
+    +S.recipes.filter(function(x){return x.id!==r.id}).map(function(x){return'<option value="'+esc(x.name)+' (ricetta)">'}).join('')+'</datalist>'
   +r.rows.map(function(row,i){return rowHTML(row,i)}).join('')
   +'<button data-act="addrow" style="width:100%">+ Aggiungi ingrediente</button>'
-  +'<div class="tot"><div class="r"><span>Costo totale ricetta</span><b id="t-tot"></b></div><div class="r"><span>Costo per dose</span><b class="big" id="t-dose"></b></div>'
+  +'<div class="tot"><div class="r"><span>Costo totale ricetta</span><b id="t-tot"></b></div><div class="r"><span>Costo per dose</span><b class="big" id="t-dose"></b></div><div class="r" id="t-kgr"><span>Costo al kg (dalla resa)</span><b id="t-kg"></b></div>'
   +'<div id="t-warn" class="warn" style="font-size:13px"></div>'
   +'<hr style="border:0;border-top:1px solid var(--line);margin:10px 0">'
   +'<label style="margin:0">Prezzo di vendita IVA inclusa (facoltativo)<input type="number" inputmode="decimal" step="0.01" value="'+esc(r.price||'')+'" oninput="route.recipe.price=this.value;recalc()"></label>'
   +'<div class="r" style="margin-top:8px"><span>Food cost %</span><b id="t-fc"></b></div><div class="r"><span>Margine (IVA esclusa)</span><b id="t-mg"></b></div></div>'
-  +'<div id="rerr" class="bad"></div>'
-  +'<div class="acts"><button class="pri" data-act="saverecipe">Salva ricetta</button><button data-act="dupl">Duplica</button>'+(r.isNew?'':'<button class="del" data-act="delrecipe">Elimina</button>')+'</div>';
+  +'<div id="rerr" class="lockmsg"></div>'
+  +'<div class="acts"><button class="pri" data-act="saverecipe">Salva ricetta</button>'+(r.isNew?'':'<button data-act="dupl"'+(lockRecipe()?' class="locked"':'')+'>Duplica</button><button class="del" data-act="delrecipe">Elimina</button>')+'</div>';
 }
 function rowHTML(row,i){
-  var f=foodById(row.foodId),ui=f?unitInfo(f):null,u=ui?BASEU[ui.basis]:'g';
+  var ui=rowInfo(row,[route.recipe.id]),u=ui?BASEU[ui.basis]:'g';
   return'<div class="ing" data-i="'+i+'"><div class="top"><input list="foodlist" placeholder="Cerca ingrediente…" value="'+esc(row.name||'')+'" oninput="pickFood('+i+',this.value)"><button class="sm del" data-act="delrow" data-i="'+i+'">✕</button></div>'
   +'<div class="grid3"><label>Quantità (<span id="u'+i+'">'+u+'</span>)<input type="number" inputmode="decimal" value="'+esc(row.qty||'')+'" oninput="route.recipe.rows['+i+'].qty=this.value;recalc()"></label>'
   +'<label>Scarto %<input type="number" inputmode="decimal" value="'+esc(row.waste||'')+'" oninput="route.recipe.rows['+i+'].waste=this.value;recalc()" placeholder="0"></label>'
   +'<div class="cost" id="c'+i+'"></div></div><div class="mut" id="m'+i+'"></div></div>';
 }
 function pickFood(i,v){
-  var row=route.recipe.rows[i],f=foodByName(v);
-  row.name=v;row.foodId=f?f.id:'';
+  var row=route.recipe.rows[i],f=foodByName(v),sr=null;
+  if(!f){var n=String(v).replace(/ \(ricetta\)$/,'').trim().toLowerCase();sr=S.recipes.filter(function(x){return x.id!==route.recipe.id&&x.name.trim().toLowerCase()===n})[0]}
+  row.name=sr?sr.name:v;row.foodId=f?f.id:'';row.subId=sr?sr.id:'';
   recalc();
 }
 function recalc(){
   var r=route.recipe;if(!r)return;
   r.rows.forEach(function(row,i){
-    var f=foodById(row.foodId),ui=f?unitInfo(f):null,c=rowCost(row);
+    var st=[r.id],f=row.subId?recipeById(row.subId):foodById(row.foodId),ui=rowInfo(row,st),c=rowCost(row,st);
     var ce=document.getElementById('c'+i),me=document.getElementById('m'+i),ue=document.getElementById('u'+i);
     if(ue)ue.textContent=ui?BASEU[ui.basis]:'g';
     if(ce)ce.textContent=c==null?'—':eur(c);
     if(me){
       if(!row.name)me.textContent='';
-      else if(!f)me.innerHTML='<span class="warn">Alimento non trovato in anagrafica</span>';
-      else if(!ui)me.innerHTML='<span class="warn">Alimento senza prezzo valido</span>';
-      else me.textContent='Costo base '+eur(ui.disp)+ui.label;
+      else if(!f)me.innerHTML='<span class="warn">'+(row.subId?'Ricetta non trovata':'Alimento o ricetta non trovato')+'</span>';
+      else if(!ui)me.innerHTML='<span class="warn">'+(row.subId?'Ricetta senza costo (o usata in un ciclo)':'Alimento senza prezzo valido')+'</span>';
+      else me.textContent=(row.subId?'Ricetta · costo ':'Costo base ')+eur(ui.disp)+ui.label;
     }
   });
   var t=recipeTotal(r),d=num(r.portions)>0?num(r.portions):1,dose=t.total/d;
   var s=function(id,v,h){var e=document.getElementById(id);if(e){if(h)e.innerHTML=v;else e.textContent=v}};
   s('t-tot',eur(t.total));s('t-dose',eur(dose));
+  var y=num(r.yieldG),kr=document.getElementById('t-kgr');if(kr)kr.style.display=y>0?'':'none';s('t-kg',y>0?eur(t.total/y*1000):'');
   s('t-warn',t.miss?t.miss+' ingrediente/i senza prezzo: il totale è parziale':'');
   var p=num(r.price),net=p/(1+S.iva/100);
   s('t-fc',p>0?(dose/net*100).toFixed(1).replace('.',',')+' %':'—');
@@ -308,8 +428,10 @@ function recalc(){
 }
 
 /* ---------- MARGINALITÀ ---------- */
-var SUBS={alimenti:'Anagrafica alimenti e prezzi',ricette:'Ricettario e food cost',marginalita:'Food cost e margini per piatto',menu:'Menu engineering',dati:'Anagrafica attività, liste e backup'};
+var SUBS={alimenti:'Anagrafica alimenti e prezzi',ricette:'Ricettario e food cost',marginalita:'Food cost e margini per piatto',menu:'Menu engineering',dati:'Anagrafica attività e liste',clienti:'Pannello clienti'};
 function subt(){
+  var e0=document.getElementById('sub');
+  if(route.tab==='clienti'||!S){if(e0)e0.textContent=route.tab==='clienti'?SUBS.clienti:'';return}
   var t=S.tenant.ragione?S.tenant.ragione+(S.tenant.tipo?' · '+S.tenant.tipo:''):'';
   var e=document.getElementById('sub');if(e)e.textContent=route.recipe?'Ricetta':(t?t+' — ':'')+SUBS[route.tab];
 }
@@ -328,7 +450,7 @@ function calcR(r){
 function pct(x){return x==null?'—':(x*100).toFixed(1).replace('.',',')+' %'}
 function fcClass(x){if(x==null)return'';var t=S.fcTarget/100;return x<=t?'ok':(x<=t+0.05?'warn':'bad')}
 function setT(id,t){var e=document.getElementById(id);if(e)e.textContent=t}
-function setPrice(id,v){var r=S.recipes.filter(function(x){return x.id===id})[0];r.price=v;save();paintMarg()}
+function setPrice(id,v){var r=recipeById(id);r.price=v;paintMarg();later('pr'+id,function(){api('PATCH','/recipes/'+id,{price:v}).catch(showErr)})}
 function margHTML(){
   if(!S.recipes.length)return'<div class="empty">Nessuna ricetta.<br>Creale nella sezione Ricette.</div>';
   return'<p class="mut" style="margin:0 0 6px">Inserisci il prezzo di vendita IVA inclusa: food cost e margini si calcolano da soli. Il food cost è verde fino al '+S.fcTarget+'%, arancione fino a +5 punti, poi rosso.</p>'
@@ -357,7 +479,7 @@ function paintMarg(){
 }
 
 /* ---------- MENU ENGINEERING ---------- */
-function setMenu(id,f,v){var r=S.recipes.filter(function(x){return x.id===id})[0];r[f]=v;save();paintMenu()}
+function setMenu(id,f,v){var r=recipeById(id);r[f]=v;paintMenu();var b={};b[f]=v;later(f+id,function(){api('PATCH','/recipes/'+id,b).catch(showErr)})}
 function classify(x,aJ,aG,aK){
   if(!(x.net>0&&x.c.ok))return{t:'Manca prezzo o ingredienti',c:'b-mut',h:''};
   if(!(x.sold>0))return{t:'Inserisci il venduto',c:'b-mut',h:''};
@@ -405,27 +527,199 @@ function paintMenu(){
 }
 
 /* ---------- DATI ---------- */
+function setTen(k,v){
+  if(k==='iva')S.iva=num(v);else if(k==='fcTarget')S.fcTarget=num(v)||30;else S.tenant[k]=v;
+  subt();
+  later('ten',function(){
+    if(!S.tenant.ragione.trim())return;
+    api('PUT','/tenant',{ragione:S.tenant.ragione,tipo:S.tenant.tipo,iva:S.iva,fcTarget:S.fcTarget}).then(function(){
+      var t=ME.tenants.filter(function(x){return x.id===CUR})[0];if(t&&t.ragione!==S.tenant.ragione){t.ragione=S.tenant.ragione;renderTop()}
+    }).catch(showErr);
+  },700);
+}
 function datiHTML(){
-  function box(key,title,ph){return'<div class="card"><b>'+title+'</b><div class="chips">'+S.lists[key].map(function(v,i){return'<span class="chip">'+esc(v)+'<button data-act="dellist" data-k="'+key+'" data-i="'+i+'">×</button></span>'}).join('')+(S.lists[key].length?'':'<span class="mut">Nessuno</span>')+'</div>'
-   +'<div class="bar" style="margin:0"><input id="add-'+key+'" placeholder="'+ph+'"><button class="pri" style="flex:0" data-act="addlist" data-k="'+key+'">Aggiungi</button></div></div>'}
-  var ten='<div class="card"><b>Anagrafica attività</b><div style="height:8px"></div><label>Ragione sociale<input value="'+esc(S.tenant.ragione)+'" oninput="S.tenant.ragione=this.value;save();subt()"></label>'
-   +'<label style="margin:0">Tipo di attività<select onchange="S.tenant.tipo=this.value;save();subt()"><option value="">—</option>'+S.lists.tipiAttivita.map(function(v){return'<option'+(S.tenant.tipo===v?' selected':'')+'>'+esc(v)+'</option>'}).join('')+'</select></label></div>';
-  return ten+box('reparti','Reparti','Nuovo reparto')+box('fornitori','Fornitori','Nuovo fornitore')+box('tipologie','Tipologie piatti','Nuova tipologia')+box('tipiAttivita','Tipi di attività','Nuovo tipo di attività')
-  +'<div class="card"><label style="margin:0">Aliquota IVA sulle vendite (%)<input type="number" inputmode="decimal" value="'+S.iva+'" oninput="S.iva=num(this.value);save()"></label></div>'
-  +'<div class="card"><label style="margin:0">Food cost obiettivo (%)<input type="number" inputmode="decimal" value="'+S.fcTarget+'" oninput="S.fcTarget=num(this.value)||30;save()"></label></div>'
-  +'<div class="card"><b>Backup dati</b><p class="mut" style="margin:4px 0 8px">I dati sono salvati in questo browser. Copia il backup e conservalo: serve per spostare i dati su un altro dispositivo.</p>'
-  +'<textarea id="bk" placeholder="Il backup appare qui. Per ripristinare, incolla qui un backup e premi Importa."></textarea>'
-  +'<div class="acts"><button class="pri" data-act="export">Esporta</button><button data-act="import">Importa</button></div><p id="bkmsg" class="mut"></p></div>'
-  +'<div class="card"><b>Dati di test</b><p class="mut" style="margin:4px 0 8px">18 alimenti e 6 ricette con prezzi e quantità presi dal tuo Excel. Prezzi di vendita, venduto e tempi sono valori di prova. Attenzione: sostituisce tutti i dati attuali.</p><button data-act="reseed">Ricarica dati di test</button></div>'
-  +'<p class="soon">In arrivo: Matrice, accesso clienti con login.</p>';
+  function box(key,title,ph,act){var vals=key==='tipiAttivita'?S.lists.tipiAttivita:S.lists[key];
+   return'<div class="card"><b>'+title+'</b><div class="chips">'+vals.map(function(v,i){return'<span class="chip">'+esc(v)+'<button data-act="'+(act||'dellist')+'" data-k="'+key+'" data-i="'+i+'">×</button></span>'}).join('')+(vals.length?'':'<span class="mut">Nessuno</span>')+'</div>'
+   +'<div class="bar" style="margin:0"><input id="add-'+key+'" placeholder="'+ph+'"><button class="pri" style="flex:0" data-act="'+(act?'addtipo':'addlist')+'" data-k="'+key+'">Aggiungi</button></div></div>'}
+  var ten='<div class="card"><b>Anagrafica attività</b><div style="height:8px"></div><label>Ragione sociale<input value="'+esc(S.tenant.ragione)+'" oninput="setTen(\'ragione\',this.value)"></label>'
+   +'<label style="margin:0">Tipo di attività<select onchange="setTen(\'tipo\',this.value)"><option value="">—</option>'+S.lists.tipiAttivita.map(function(v){return'<option'+(S.tenant.tipo===v?' selected':'')+'>'+esc(v)+'</option>'}).join('')+'</select></label></div>';
+  var h=ten+box('reparti','Reparti','Nuovo reparto')+box('fornitori','Fornitori','Nuovo fornitore')+box('tipologie','Tipologie piatti','Nuova tipologia')
+  +'<div class="card"><label style="margin:0">Aliquota IVA sulle vendite (%)<input type="number" inputmode="decimal" value="'+S.iva+'" oninput="setTen(\'iva\',this.value)"></label></div>'
+  +'<div class="card"><label style="margin:0">Food cost obiettivo (%)<input type="number" inputmode="decimal" value="'+S.fcTarget+'" oninput="setTen(\'fcTarget\',this.value)"></label></div>';
+  if(S.isSuper){
+    h+='<h2 class="gh">SOLO SUPER ADMIN</h2>'+box('tipiAttivita','Tipi di attività (elenco comune a tutti i clienti)','Nuovo tipo di attività','deltipo')
+    +'<div class="card"><b>Backup ed esportazione</b><p class="mut" style="margin:4px 0 8px">Scarica i dati di questo cliente o di tutti i clienti in un file. I clienti non vedono questa sezione.</p>'
+    +'<div class="acts" style="margin-top:0"><button class="pri" data-act="export">Esporta questo cliente</button><button data-act="exportall">Esporta tutti i clienti</button></div></div>'
+    +'<div class="card"><b>Importa backup in questo cliente</b><p class="mut" style="margin:4px 0 8px">Scegli un file di backup (anche quelli della vecchia versione) oppure incollane il contenuto. Attenzione: sostituisce alimenti, ricette ed elenchi di questo cliente.</p>'
+    +'<input type="file" id="bkfile" accept=".json,application/json" onchange="readBk(this)" style="margin-bottom:8px">'
+    +'<textarea id="bk" placeholder="Contenuto del backup"></textarea>'
+    +'<div class="acts"><button data-act="import">Importa</button></div><p id="bkmsg" class="mut"></p></div>'
+    +'<div class="card"><b>Dati di test</b><p class="mut" style="margin:4px 0 8px">25 alimenti e 8 ricette dal tuo Excel (compresa la PALLINA usata nella MARGHERITA). Prezzi di vendita, venduto e tempi sono valori di prova. Sostituisce tutti i dati di questo cliente.</p><button data-act="reseed">Carica dati di test</button></div>';
+  }
+  return h+'<p class="soon">In arrivo: Matrice.</p>';
+}
+function readBk(inp){var f=inp.files&&inp.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(){document.getElementById('bk').value=rd.result;msg('File caricato: premi Importa.')};rd.readAsText(f)}
+function download(name,obj){
+  var b=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'}),a=document.createElement('a');
+  a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500);
+}
+function slug(t){return String(t||'cliente').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'cliente'}
+
+/* ---------- PANNELLO CLIENTI (solo super admin) ---------- */
+function loadAdmin(){
+  return Promise.all([api('GET','/admin/tenants'),api('GET','/admin/users'),api('GET','/public/tipi')]).then(function(r){
+    var keep=ADM&&ADM.msg,open=ADM&&ADM.open;ADM={tenants:r[0].tenants,users:r[1].users,tipi:r[2].tipi,msg:keep||'',open:open||null};
+  });
+}
+function admReload(){return Promise.all([loadAdmin(),refreshMe()]).then(render).catch(showErr)}
+function tmpMsg(email,pw){ADM.msg='<div class="tmp">Password provvisoria per <b>'+esc(email)+'</b>: <code>'+esc(pw)+'</code><br><span class="mut">Copiala e comunicala: non verrà più mostrata. Al primo accesso verrà chiesto di cambiarla.</span></div>'}
+function tenOpts(sel){return ADM.tipi.map(function(v){return'<option'+(sel===v?' selected':'')+'>'+esc(v)+'</option>'}).join('')}
+function adminHTML(){
+  if(!ADM){loadAdmin().then(render).catch(showErr);return'<div class="empty">Caricamento…</div>'}
+  var pend=ADM.tenants.filter(function(t){return t.status==='pending'}),others=ADM.tenants.filter(function(t){return t.status!=='pending'});
+  var h='<div class="adm">'+(ADM.msg||'');
+  h+='<h2 class="gh">RICHIESTE IN ATTESA ('+pend.length+')</h2>';
+  h+=pend.length?pend.map(function(t){
+    return'<div class="card"><b>'+esc(t.ragione)+'</b> <span class="mut">'+esc(t.tipo)+'</span><div class="sm-list">'+t.admins.map(function(a){return esc(a.email)}).join(', ')+' · richiesta del '+dIt(String(t.createdAt).slice(0,10))+'</div>'
+      +'<div class="acts" style="margin-top:6px"><button class="pri" data-act="tapprove" data-id="'+t.id+'">Approva</button><button class="del" data-act="tdelete" data-id="'+t.id+'">Rifiuta</button></div></div>';
+  }).join(''):'<p class="mut">Nessuna richiesta.</p>';
+  h+='<h2 class="gh">CLIENTI ('+others.length+')</h2>'+others.map(tCard).join('');
+  h+='<h2 class="gh">NUOVO CLIENTE</h2><div class="card"><p class="mut" style="margin:0 0 8px">Crei tu un cliente già approvato. Se indichi l\'email, viene creato anche il suo accesso con una password provvisoria.</p>'
+    +'<div class="row"><label>Ragione sociale<input id="nc-rag"></label><label>Tipo di attività<select id="nc-tipo"><option value="">—</option>'+tenOpts('')+'</select></label></div>'
+    +'<label>Email amministratore (facoltativa)<input id="nc-email" type="email" autocomplete="off"></label>'
+    +'<label class="chk"><input type="checkbox" id="nc-demo"> Carica i dati di test</label>'
+    +'<div class="acts"><button class="pri" data-act="tcreate">Crea cliente</button></div></div>';
+  var vw=ADM.users.filter(function(u){return u.role==='viewer'});
+  h+='<h2 class="gh">VISUALIZZATORI ('+vw.length+')</h2><p class="mut" style="margin:0 0 8px">Accesso in sola lettura: collaboratori dei clienti o tuoi consulenti. Uno stesso visualizzatore può vedere più clienti.</p>';
+  h+=vw.map(function(u){
+    return'<div class="card"><div class="mh"><b>'+esc(u.email)+'</b><span class="badge '+(u.status==='active'?'b-ok':'b-bad')+'">'+(u.status==='active'?'attivo':'disattivato')+'</span></div>'
+      +'<div class="sm-list">Può vedere:</div>'+ADM.tenants.map(function(t){return'<label class="chk"><input type="checkbox" id="vt-'+u.id+'-'+t.id+'"'+(u.tenantIds.indexOf(t.id)>=0?' checked':'')+'> '+esc(t.ragione)+'</label>'}).join('')
+      +'<div class="acts"><button class="pri" data-act="vsave" data-id="'+u.id+'">Salva</button><button data-act="ureset" data-id="'+u.id+'" data-email="'+esc(u.email)+'">Nuova password</button>'
+      +'<button data-act="ustatus" data-id="'+u.id+'" data-s="'+(u.status==='active'?'disabled':'active')+'">'+(u.status==='active'?'Disattiva':'Riattiva')+'</button><button class="del" data-act="vdelete" data-id="'+u.id+'">Elimina</button></div></div>';
+  }).join('');
+  h+='<div class="card"><b>Nuovo visualizzatore</b><div style="height:8px"></div><label>Email<input id="nv-email" type="email" autocomplete="off"></label><div class="sm-list">Può vedere:</div>'
+    +ADM.tenants.map(function(t){return'<label class="chk"><input type="checkbox" id="nv-t-'+t.id+'"> '+esc(t.ragione)+'</label>'}).join('')
+    +'<div class="acts"><button class="pri" data-act="vcreate">Crea visualizzatore</button></div></div>';
+  return h+'</div>';
+}
+function tCard(t){
+  var st={approved:['attivo','b-ok'],suspended:['sospeso','b-bad']}[t.status]||['in attesa','b-warn'];
+  var full=t.maxRecipes!=null&&t.recipeCount>=t.maxRecipes;
+  return'<details class="tc"'+(ADM.open===t.id?' open':'')+' data-tid="'+t.id+'"><summary><span><b>'+esc(t.ragione)+'</b> <span class="mut">'+esc(t.tipo)+'</span></span>'
+    +'<span class="right"><span class="badge '+st[1]+'">'+st[0]+'</span><br><span class="mut'+(full?' bad':'')+'">Ricette '+t.recipeCount+' / '+(t.maxRecipes==null?'∞':t.maxRecipes)+'</span></span></summary>'
+    +'<div style="margin-top:10px"><div class="sm-list">Amministratori: '+(t.admins.length?t.admins.map(function(a){return esc(a.email)+' <button class="sm" data-act="ureset" data-id="'+a.id+'" data-email="'+esc(a.email)+'">Nuova password</button>'}).join(' '):'nessuno')+'</div>'
+    +'<div class="sm-list">Visualizzatori: '+(t.viewers.length?t.viewers.map(function(v){return esc(v.email)}).join(', '):'nessuno')+' · Alimenti: '+t.foodCount+'</div>'
+    +'<div class="row"><label>Ragione sociale<input id="rg-'+t.id+'" value="'+esc(t.ragione)+'"></label><label>Tipo di attività<select id="tp-'+t.id+'"><option value="">—</option>'+tenOpts(t.tipo)+'</select></label></div>'
+    +'<div class="row"><label>Piano<select id="pl-'+t.id+'" onchange="document.getElementById(\'mx-'+t.id+'\').value=this.value===\'pro\'?\'\':20"><option value="basic"'+(t.plan==='basic'?' selected':'')+'>Base</option><option value="pro"'+(t.plan==='pro'?' selected':'')+'>Pro (a pagamento)</option></select></label>'
+    +'<label>Limite ricette (vuoto = illimitato)<input type="number" inputmode="numeric" id="mx-'+t.id+'" value="'+(t.maxRecipes==null?'':t.maxRecipes)+'"></label></div>'
+    +'<label class="chk"><input type="checkbox" id="cf-'+t.id+'"'+(t.canAddFoods?' checked':'')+'> Può inserire alimenti</label>'
+    +'<label class="chk"><input type="checkbox" id="cr-'+t.id+'"'+(t.canAddRecipes?' checked':'')+'> Può creare ricette</label>'
+    +'<div class="acts"><button class="pri" data-act="tsave" data-id="'+t.id+'">Salva</button><button data-act="twork" data-id="'+t.id+'">Lavora su questo cliente</button>'
+    +'<button data-act="tstatus" data-id="'+t.id+'" data-s="'+(t.status==='suspended'?'approved':'suspended')+'">'+(t.status==='suspended'?'Riattiva':'Sospendi')+'</button>'
+    +'<button class="del" data-act="tdelete" data-id="'+t.id+'">Elimina cliente</button></div></div></details>';
 }
 
+/* ---------- ACCESSO, REGISTRAZIONE, PASSWORD ---------- */
+var TIPI=null;
+function renderAuth(){
+  document.getElementById('top').innerHTML='';document.getElementById('sheet').innerHTML='';
+  document.getElementById('sub').textContent='Food cost e menu engineering';
+  var app=document.getElementById('app'),m=route.authMsg?'<div class="'+(route.authOk?'info':'lockmsg')+'">'+esc(route.authMsg)+'</div>':'';
+  if(route.auth==='register'){
+    if(!TIPI){api('GET','/public/tipi').then(function(d){TIPI=d.tipi;renderAuth()}).catch(function(){TIPI=[];renderAuth()})}
+    app.innerHTML='<form class="card auth" data-form="register"><h2>Registra la tua attività</h2>'+m
+      +'<label>Email<input type="email" id="r-email" autocomplete="email" required></label>'
+      +'<label>Password (almeno 10 caratteri)<input type="password" id="r-pw" autocomplete="new-password" minlength="10" required></label>'
+      +'<label>Ripeti la password<input type="password" id="r-pw2" autocomplete="new-password" required></label>'
+      +'<label>Ragione sociale<input id="r-rag" required></label>'
+      +'<label>Tipo di attività<select id="r-tipo" required><option value="">—</option>'+(TIPI||[]).map(function(v){return'<option>'+esc(v)+'</option>'}).join('')+'</select></label>'
+      +'<p class="mut" style="margin:0 0 6px">Dopo la registrazione l\'amministratore dovrà approvare la tua attività prima che tu possa accedere.</p>'
+      +'<div class="acts"><button class="pri" type="submit">Invia richiesta</button></div>'
+      +'<button type="button" class="link" data-act="gologin">Hai già un account? Accedi</button></form>';
+  }else{
+    app.innerHTML='<form class="card auth" data-form="login"><h2>Accedi</h2>'+m
+      +'<label>Email<input type="email" id="l-email" autocomplete="username" required></label>'
+      +'<label>Password<input type="password" id="l-pw" autocomplete="current-password" required></label>'
+      +'<div class="acts"><button class="pri" type="submit">Accedi</button></div>'
+      +'<button type="button" class="link" data-act="goregister">Non hai un account? Registra la tua attività</button>'
+      +'<p class="mut" style="margin:8px 0 0">Password dimenticata? Contatta l\'amministratore: ti invierà una password provvisoria.</p></form>';
+  }
+}
+function pwSheetHTML(){
+  var f=route.pw.forced;
+  return'<div class="sheet-bg"'+(f?'':' data-act="closebg"')+'><form class="sheet" data-form="pw"><h2>Cambia password</h2>'
+  +(f?'<div class="info">Stai usando una password provvisoria: scegline una tua per continuare.</div>':'')
+  +'<label>Password attuale<input type="password" id="p-old" autocomplete="current-password" required></label>'
+  +'<label>Nuova password (almeno 10 caratteri)<input type="password" id="p-new" autocomplete="new-password" minlength="10" required></label>'
+  +'<label>Ripeti la nuova password<input type="password" id="p-new2" autocomplete="new-password" required></label>'
+  +'<p id="perr" class="bad" style="margin:0"></p>'
+  +'<div class="acts"><button class="pri" type="submit">Salva</button>'+(f?'<button type="button" data-act="logout">Esci</button>':'<button type="button" data-act="pwclose">Annulla</button>')+'</div></form></div>';
+}
+function val(id){var e=document.getElementById(id);return e?e.value:''}
+function busy(btn,p){if(btn)btn.disabled=true;return p.then(function(x){if(btn)btn.disabled=false;return x},function(e){if(btn)btn.disabled=false;throw e})}
+document.addEventListener('submit',function(e){
+  var f=e.target.closest('[data-form]');if(!f)return;e.preventDefault();
+  var btn=f.querySelector('button[type=submit]'),k=f.dataset.form;
+  if(k==='login'){
+    busy(btn,api('POST','/login',{email:val('l-email'),password:val('l-pw')})).then(function(){route.authMsg='';route.authOk=false;return boot()})
+      .catch(function(x){route.authMsg=x.message;route.authOk=false;renderAuth()});
+  }else if(k==='register'){
+    var em=val('r-email');
+    if(val('r-pw')!==val('r-pw2')){route.authMsg='Le due password non coincidono.';route.authOk=false;renderAuth();return}
+    busy(btn,api('POST','/register',{email:em,password:val('r-pw'),ragione:val('r-rag'),tipo:val('r-tipo')})).then(function(d){
+      route.auth='login';route.authMsg=d.message;route.authOk=true;renderAuth();var le=document.getElementById('l-email');if(le)le.value=em;
+    }).catch(function(x){route.authMsg=x.message;route.authOk=false;var keep={e:em,g:val('r-rag'),t:val('r-tipo')};renderAuth();
+      document.getElementById('r-email').value=keep.e;document.getElementById('r-rag').value=keep.g;document.getElementById('r-tipo').value=keep.t});
+  }else if(k==='pw'){
+    var pe=document.getElementById('perr');
+    if(val('p-new')!==val('p-new2')){pe.textContent='Le due password non coincidono.';return}
+    busy(btn,api('POST','/password',{old:val('p-old'),new:val('p-new')})).then(function(){ME.user.mustChangePw=false;route.pw=null;render();toast('Password cambiata.')})
+      .catch(function(x){pe.textContent=x.message});
+  }
+});
+
 /* ---------- eventi ---------- */
+function rowsOut(r){return r.rows.filter(function(x){return x.foodId||x.subId||x.name}).map(function(x){return{foodId:x.foodId||'',subId:x.subId||'',name:x.name||'',qty:x.qty,waste:x.waste}})}
+function recipeOut(r){return{name:r.name.trim(),type:r.type||'',portions:r.portions,yieldG:r.yieldG||'',price:r.price,sold:r.sold||'',time:r.time||'',rows:rowsOut(r)}}
+function armed(t,label){if(t.dataset.armed)return true;t.dataset.armed='1';t.textContent=label;return false}
 document.addEventListener('click',function(e){
   var t=e.target.closest('[data-tab],[data-act]');if(!t)return;
-  if(t.dataset.tab){route.tab=t.dataset.tab;route.recipe=null;route.food=null;route.cat='';route.q='';render();window.scrollTo(0,0);return}
+  if(t.dataset.tab){route.tab=t.dataset.tab;route.recipe=null;route.food=null;route.cat='';route.q='';if(route.tab==='clienti'){ADM&&(ADM.msg='');ADM=null}render();window.scrollTo(0,0);return}
   var a=t.dataset.act,id=t.dataset.id;
-  if(a==='newfood'){route.food={id:uid(),isNew:true,name:'',category:'',supplier:'',unit:'kg',mode:'max',packQty:'',packUnit:'g',history:[]};render()}
+  /* clic sullo sfondo scuro di una scheda: chiude solo se non si è cliccato dentro la scheda */
+  if(a==='closebg'){if(e.target!==t)return;if(route.pw){if(!route.pw.forced)route.pw=null}else route.food=null;render();return}
+  /* accesso e account */
+  if(a==='goregister'){route.auth='register';route.authMsg='';renderAuth();return}
+  if(a==='gologin'){route.auth='login';route.authMsg='';renderAuth();return}
+  if(a==='logout'){api('POST','/logout',{}).catch(function(){}).then(function(){ME=null;S=null;CUR=null;ADM=null;route.pw=null;route.auth='login';route.authMsg='';render()});return}
+  if(a==='pwopen'){route.pw={forced:false};render();return}
+  if(a==='pwclose'){if(route.pw&&!route.pw.forced){route.pw=null;render()}return}
+  /* pannello clienti */
+  if(a==='tapprove'){busy(t,api('PUT','/admin/tenants/'+id,{status:'approved'})).then(function(){ADM.msg='';return admReload()}).catch(showErr);return}
+  if(a==='tstatus'){ADM.open=id;busy(t,api('PUT','/admin/tenants/'+id,{status:t.dataset.s})).then(admReload).catch(showErr);return}
+  if(a==='tsave'){
+    ADM.open=id;var mx=val('mx-'+id);
+    busy(t,api('PUT','/admin/tenants/'+id,{ragione:val('rg-'+id),tipo:val('tp-'+id),plan:val('pl-'+id),maxRecipes:mx===''?null:mx,
+      canAddFoods:document.getElementById('cf-'+id).checked,canAddRecipes:document.getElementById('cr-'+id).checked}))
+      .then(function(){toast('Cliente aggiornato.');return admReload()}).then(function(){if(CUR===id)return reload()}).catch(showErr);return}
+  if(a==='tdelete'){if(armed(t,'Tocca ancora: elimina tutti i suoi dati'))busy(t,api('DELETE','/admin/tenants/'+id,{})).then(function(){if(CUR===id){CUR=null;S=null;lsSet('fc:tenant',null)}return admReload()}).catch(showErr);return}
+  if(a==='twork'){switchTenant(id);return}
+  if(a==='tcreate'){
+    var em=val('nc-email').trim();
+    busy(t,api('POST','/admin/tenants',{ragione:val('nc-rag'),tipo:val('nc-tipo'),email:em,demo:document.getElementById('nc-demo').checked})).then(function(d){
+      ADM.msg=d.tempPassword?'':'<div class="info">Cliente creato.</div>';if(d.tempPassword)tmpMsg(em,d.tempPassword);ADM.open=d.id;window.scrollTo(0,0);return admReload();
+    }).catch(showErr);return}
+  if(a==='ureset'){if(armed(t,'Tocca ancora per generarla'))busy(t,api('POST','/admin/users/'+id+'/reset',{})).then(function(d){tmpMsg(t.dataset.email,d.tempPassword);window.scrollTo(0,0);return admReload()}).catch(showErr);return}
+  if(a==='ustatus'){busy(t,api('PUT','/admin/users/'+id,{status:t.dataset.s})).then(admReload).catch(showErr);return}
+  if(a==='vsave'||a==='vcreate'){
+    var pre=a==='vsave'?'vt-'+id+'-':'nv-t-',tids=ADM.tenants.filter(function(x){var c=document.getElementById(pre+x.id);return c&&c.checked}).map(function(x){return x.id});
+    if(a==='vsave')busy(t,api('PUT','/admin/users/'+id,{tenantIds:tids})).then(function(){toast('Visualizzatore aggiornato.');return admReload()}).catch(showErr);
+    else{var ve=val('nv-email').trim();busy(t,api('POST','/admin/viewers',{email:ve,tenantIds:tids})).then(function(d){tmpMsg(ve,d.tempPassword);window.scrollTo(0,0);return admReload()}).catch(showErr)}
+    return}
+  if(a==='vdelete'){if(armed(t,'Tocca ancora per eliminare'))busy(t,api('DELETE','/admin/users/'+id,{})).then(admReload).catch(showErr);return}
+  /* dati dell'attività */
+  if(!S)return;
+  if(a==='newfood'){var lf=lockFood();if(lf){showLock(lf);return}route.food={id:uid(),isNew:true,name:'',category:'',supplier:'',unit:'kg',mode:'max',packQty:'',packUnit:'g',history:[]};render()}
   else if(a==='editfood'){route.food=clone(foodById(id));render()}
   else if(a==='closefood'){route.food=null;render()}
   else if(a==='addprice'){
@@ -438,44 +732,40 @@ document.addEventListener('click',function(e){
     if(!f.name.trim()){err.textContent='Inserisci la descrizione del prodotto.';return}
     var dup=S.foods.filter(function(x){return x.id!==f.id&&x.name.trim().toLowerCase()===f.name.trim().toLowerCase()})[0];
     if(dup){err.textContent='Esiste già un alimento con questo nome.';return}
-    f.name=f.name.trim();
-    if(f.supplier&&f.supplier.trim()&&S.lists.fornitori.indexOf(f.supplier.trim())<0)S.lists.fornitori.push(f.supplier.trim());
-    var isNew=f.isNew;delete f.isNew;
-    if(isNew)S.foods.push(f);else S.foods=S.foods.map(function(x){return x.id===f.id?f:x});
-    save();route.food=null;render();
+    var fo={name:f.name.trim(),category:f.category,supplier:(f.supplier||'').trim(),unit:f.unit,mode:f.mode,packQty:f.packQty,packUnit:f.packUnit,history:f.history.map(function(h){return{date:h.date,price:h.price}})};
+    busy(t,f.isNew?api('POST','/foods',fo):api('PUT','/foods/'+f.id,fo)).then(function(){route.food=null;return reload()}).catch(function(x){err.textContent=x.message});
   }
-  else if(a==='delfood'){
-    if(t.dataset.armed){S.foods=S.foods.filter(function(x){return x.id!==route.food.id});save();route.food=null;render()}
-    else{t.dataset.armed='1';t.textContent='Tocca ancora per eliminare'}
-  }
-  else if(a==='newrecipe'){route.recipe={id:uid(),isNew:true,name:'',type:'',portions:1,price:'',rows:[{foodId:'',name:'',qty:'',waste:''}]};render();window.scrollTo(0,0)}
-  else if(a==='editrecipe'){route.recipe=clone(S.recipes.filter(function(r){return r.id===id})[0]);render();window.scrollTo(0,0)}
+  else if(a==='delfood'){if(armed(t,'Tocca ancora per eliminare'))busy(t,api('DELETE','/foods/'+route.food.id,{})).then(function(){route.food=null;return reload()}).catch(showErr)}
+  else if(a==='newrecipe'){var lr=lockRecipe();if(lr){showLock(lr);return}route.recipe={id:uid(),isNew:true,name:'',type:'',portions:1,yieldG:'',price:'',rows:[{foodId:'',subId:'',name:'',qty:'',waste:''}]};render();window.scrollTo(0,0)}
+  else if(a==='editrecipe'){route.recipe=clone(recipeById(id));render();window.scrollTo(0,0)}
   else if(a==='backrecipe'){route.recipe=null;render()}
-  else if(a==='addrow'){route.recipe.rows.push({foodId:'',name:'',qty:'',waste:''});render();
+  else if(a==='addrow'){route.recipe.rows.push({foodId:'',subId:'',name:'',qty:'',waste:''});render();
     var inp=document.querySelectorAll('.ing .top input');if(inp.length)inp[inp.length-1].focus()}
   else if(a==='delrow'){route.recipe.rows.splice(+t.dataset.i,1);render()}
   else if(a==='saverecipe'||a==='dupl'){
     var r=route.recipe,err2=document.getElementById('rerr');
     if(!r.name.trim()){err2.textContent='Inserisci il nome del piatto.';return}
-    r.name=r.name.trim();r.rows=r.rows.filter(function(x){return x.foodId||x.name});
-    if(a==='dupl'){r=clone(r);r.id=uid();r.name=r.name+' (copia)';r.isNew=true}
-    var nw=r.isNew;delete r.isNew;
-    if(nw)S.recipes.push(r);else S.recipes=S.recipes.map(function(x){return x.id===r.id?r:x});
-    save();route.recipe=null;render();
+    var ro=recipeOut(r),req;
+    if(a==='dupl'){var ld=lockRecipe();if(ld){err2.textContent=ld;return}ro.name=ro.name+' (copia)';req=api('POST','/recipes',ro)}
+    else req=r.isNew?api('POST','/recipes',ro):api('PUT','/recipes/'+r.id,ro);
+    busy(t,req).then(function(){route.recipe=null;return reload()}).catch(function(x){err2.textContent=x.message});
   }
-  else if(a==='delrecipe'){
-    if(t.dataset.armed){S.recipes=S.recipes.filter(function(x){return x.id!==route.recipe.id});save();route.recipe=null;render()}
-    else{t.dataset.armed='1';t.textContent='Tocca ancora per eliminare'}
+  else if(a==='delrecipe'){if(armed(t,'Tocca ancora per eliminare'))busy(t,api('DELETE','/recipes/'+route.recipe.id,{})).then(function(){route.recipe=null;return reload()}).catch(showErr)}
+  else if(a==='addlist'){var k=t.dataset.k,v=val('add-'+k).trim();if(v&&S.lists[k].indexOf(v)<0)busy(t,api('POST','/lists',{kind:k,value:v})).then(reload).catch(showErr)}
+  else if(a==='dellist'){busy(t,api('DELETE','/lists',{kind:t.dataset.k,value:S.lists[t.dataset.k][+t.dataset.i]})).then(reload).catch(showErr)}
+  /* solo super admin (il server rifiuta comunque chiunque altro) */
+  else if(a==='addtipo'){var tv=val('add-tipiAttivita').trim();if(tv)busy(t,api('POST','/admin/lists',{value:tv})).then(reload).catch(showErr)}
+  else if(a==='deltipo'){busy(t,api('DELETE','/admin/lists',{value:S.lists.tipiAttivita[+t.dataset.i]})).then(reload).catch(showErr)}
+  else if(a==='export'){busy(t,api('GET','/admin/export?tenant='+CUR)).then(function(d){download('foodcost-'+slug(S.tenant.ragione)+'-'+today()+'.json',d)}).catch(showErr)}
+  else if(a==='exportall'){busy(t,api('GET','/admin/export')).then(function(d){download('foodcost-tutti-i-clienti-'+today()+'.json',d)}).catch(showErr)}
+  else if(a==='import'){
+    var o;try{o=JSON.parse(val('bk'));if(!o.foods||!o.recipes)throw 0}catch(x){msg('Backup non valido.');return}
+    if(armed(t,'Tocca ancora: sostituisce i dati di '+S.tenant.ragione))busy(t,api('POST','/admin/import',{tenant:CUR,data:o})).then(reload).then(function(){toast('Dati importati.')}).catch(function(x){msg(x.message)});
   }
-  else if(a==='addlist'){var k=t.dataset.k,el=document.getElementById('add-'+k),v=el.value.trim();if(v&&S.lists[k].indexOf(v)<0){S.lists[k].push(v);S.lists[k].sort(function(x,y){return x.localeCompare(y,'it')});save();render()}}
-  else if(a==='dellist'){S.lists[t.dataset.k].splice(+t.dataset.i,1);save();render()}
-  else if(a==='reseed'){if(t.dataset.armed){applySeed();render()}else{t.dataset.armed='1';t.textContent='Tocca ancora per sostituire tutto'}}
-  else if(a==='export'){var ta=document.getElementById('bk');ta.value=JSON.stringify(S);ta.select();
-    try{navigator.clipboard.writeText(ta.value).then(function(){msg('Backup copiato negli appunti.')},function(){msg('Backup pronto: selezionalo e copialo.')})}catch(x){msg('Backup pronto: selezionalo e copialo.')}}
-  else if(a==='import'){try{var o=JSON.parse(document.getElementById('bk').value);if(!o.foods||!o.recipes)throw 0;S=ensure(o);save();render();msg('Dati importati.')}catch(x){msg('Backup non valido.')}}
+  else if(a==='reseed'){if(armed(t,'Tocca ancora per sostituire tutto'))busy(t,api('POST','/admin/seed',{tenant:CUR})).then(reload).then(function(){toast('Dati di test caricati.')}).catch(showErr)}
 });
 function msg(m){var e=document.getElementById('bkmsg');if(e)e.textContent=m}
-render();
+boot();
 </script>
 </body>
 </html>

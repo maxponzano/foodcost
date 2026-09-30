@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --experimental-strip-types --no-warnings test/run.mts"
+    "test": "node --experimental-strip-types --no-warnings test/run.mts",
+    "dev": "node --experimental-strip-types --no-warnings test/dev-server.mts"
   },
   "dependencies": {
     "@netlify/database": "^2.0.1",
