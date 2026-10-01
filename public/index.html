@@ -218,6 +218,17 @@ details.tc summary::-webkit-details-marker{display:none}
 .srow .si{font-weight:600}
 .srow .sn em{font-style:normal;font-size:11px}
 @media (max-width:560px){.srow{grid-template-columns:1fr 84px 76px}.srow .sp{display:none}.srow.shead span:nth-child(3){display:none}.kpis3{grid-template-columns:1fr 1fr}}
+.trh{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.trc{display:flex;gap:6px;flex-wrap:wrap}
+.trc .csel{max-width:none}
+.trs{margin:4px 0 8px;font-size:14px}
+.trw svg{display:block;max-width:100%;height:auto;font-family:var(--f-body)}
+.trw .ax{stroke:var(--mut);opacity:.6}
+.trw .tb{fill:var(--bar);opacity:.55}.trw .tb.last{opacity:1}
+.trw .tv{font-size:11px;font-weight:600;fill:var(--ink);font-feature-settings:"tnum" 1}
+.trw .tl{font-size:11px;fill:var(--mut)}
+.trw .td{font-size:11px;font-weight:600;fill:var(--mut)}.trw .td.up{fill:var(--ok)}.trw .td.dn{fill:var(--bad)}
+.trw .qhit{fill:transparent;cursor:pointer}
 .grid-2{display:grid;grid-template-columns:1fr;gap:0;margin-bottom:12px}
 .gh .cnt{font-size:12px;color:var(--mut);font-weight:600;letter-spacing:0;margin-left:4px}
 .rgh:first-child{margin-top:4px}
@@ -769,7 +780,7 @@ function qTip(e){
   tip.style.display='block';tip.style.top=(cb.top+cb.height/2-wb.top)+'px';
   tip.style.left=Math.max(70,Math.min(wb.width-70,left))+'px';
 }
-window.addEventListener('resize',function(){later('rsz',function(){if(S&&route.tab==='menu'&&!route.recipe)paintMenu()},200)});
+window.addEventListener('resize',function(){later('rsz',function(){if(S&&route.tab==='menu'&&!route.recipe)paintMenu();if(S&&route.tab==='vendite')drawTrend()},200)});
 document.addEventListener('mouseover',qTip);document.addEventListener('click',qTip);
 function avgOf(a){return a.length?a.reduce(function(s,v){return s+v},0)/a.length:0}
 function paintMenu(){
@@ -997,12 +1008,12 @@ function thisMonth(){return new Date().toISOString().slice(0,7)}
 function salesMonths(){var set={};Object.keys(S.sales||{}).forEach(function(id){Object.keys(S.sales[id]).forEach(function(m){if(S.sales[id][m]>0)set[m]=1})});return Object.keys(set).sort()}
 /* periodo scelto per l'analisi (Menù Ingegnerizzato e Riepilogo) */
 function periodRange(){
-  var P=route.per||(route.per={mode:'last'}),ms=salesMonths(),last=ms.length?ms[ms.length-1]:thisMonth(),from,to,label;
+  var P=route.per||(route.per={mode:'all'}),ms=salesMonths(),last=ms.length?ms[ms.length-1]:thisMonth(),from,to,label;
   if(P.mode==='3m'){to=last;from=mAdd(last,-2);label='ultimi 3 mesi ('+mLabel(from)+' – '+mLabel(to)+')'}
   else if(P.mode==='year'){var y=last.slice(0,4);from=y+'-01';to=y+'-12';label='anno '+y}
-  else if(P.mode==='all'){from=ms[0]||last;to=last;label='tutto lo storico'}
+  else if(P.mode==='last'){from=to=last;label=mLabel(last)}
   else if(P.mode==='custom'){from=P.from||last;to=P.to||last;if(from>to){var t=from;from=to;to=t}label=from===to?mLabel(from):mLabel(from)+' – '+mLabel(to)}
-  else{from=to=last;label=mLabel(last)}
+  else{from=ms[0]||last;to=last;label='totale di tutte le vendite'+(ms.length>1?' ('+mLabel(from)+' – '+mLabel(to)+')':ms.length?' ('+mLabel(from)+')':'')}
   return{from:from,to:to,label:label,last:last};
 }
 /* il "venduto" di ogni piatto = somma delle vendite nel periodo scelto */
@@ -1010,13 +1021,13 @@ function applySales(){
   if(!S)return;var R=periodRange();
   S.recipes.forEach(function(r){var s=(S.sales||{})[r.id]||{},t=0;Object.keys(s).forEach(function(m){if(m>=R.from&&m<=R.to)t+=s[m]});r.sold=t||''});
 }
-function setPer(k,v){route.per=route.per||{mode:'last'};route.per[k]=v;if(k==='mode'&&v==='custom'){var R=periodRange();route.per.from=route.per.from||R.last;route.per.to=route.per.to||R.last}applySales();render()}
+function setPer(k,v){route.per=route.per||{mode:'all'};route.per[k]=v;if(k==='mode'&&v==='custom'){var R=periodRange();route.per.from=route.per.from||R.last;route.per.to=route.per.to||R.last}applySales();render()}
 function periodBarHTML(){
-  var P=route.per||{mode:'last'},R=periodRange(),ms=salesMonths();
+  var P=route.per||{mode:'all'},R=periodRange(),ms=salesMonths();
   var tot=S.recipes.reduce(function(s,r){return s+num(r.sold)},0);
   var o=function(v,t){return'<option value="'+v+'"'+(P.mode===v?' selected':'')+'>'+t+'</option>'};
   return'<div class="perbar"><b>Periodo vendite</b><select data-keep onchange="setPer(\'mode\',this.value)">'
-    +o('last','Ultimo mese con vendite')+o('3m','Ultimi 3 mesi')+o('year','Anno intero')+o('all','Tutto lo storico')+o('custom','Scegli i mesi…')+'</select>'
+    +o('all','Totale di tutte le vendite')+o('last','Ultimo mese con vendite')+o('3m','Ultimi 3 mesi')+o('year','Anno intero')+o('custom','Scegli i mesi…')+'</select>'
     +(P.mode==='custom'?'<label>da<input data-keep type="month" value="'+esc(R.from)+'" onchange="setPer(\'from\',this.value)"></label><label>a<input data-keep type="month" value="'+esc(R.to)+'" onchange="setPer(\'to\',this.value)"></label>':'')
     +'<span class="mut">'+esc(R.label)+' · '+tot.toLocaleString('it-IT')+' piatti venduti'+(ms.length?'':' · nessuna vendita inserita')+'</span>'
     +(RO?'':'<button class="sm" data-tab="vendite">Inserisci le vendite →</button>')+'</div>';
@@ -1030,7 +1041,8 @@ function venditeHTML(){
   var h='<div class="sbar"><button class="sm" data-act="smprev" aria-label="Mese precedente">‹</button><input data-keep type="month" value="'+m+'" onchange="route.sm=this.value||thisMonth();render()"><button class="sm" data-act="smnext" aria-label="Mese successivo">›</button>'
     +'<b class="smt">'+mLabel(m)+'</b><span id="svstat" class="mut"></span></div>'
     +'<div class="kpis kpis3"><div class="kpi"><span>Piatti venduti nel mese</span><b id="sv-tq"></b><em id="sv-tn"></em></div><div class="kpi"><span>Incasso (IVA escl.)</span><b id="sv-ti"></b><em>prezzo di vendita × pezzi</em></div><div class="kpi"><span>Mesi con vendite</span><b>'+ms.length+'</b><em>'+(ms.length?mLabel(ms[0])+' – '+mLabel(ms[ms.length-1]):'nessuno')+'</em></div></div>'
-    +(RO?'':'<p class="mut" style="margin:0 0 6px">Scrivi i pezzi venduti e premi <b>Invio</b> per passare al piatto successivo. Il salvataggio è automatico.</p>');
+    +trendHTML()
+    +(RO?'':'<p class="mut" style="margin:12px 0 6px">Scrivi i pezzi venduti e premi <b>Invio</b> per passare al piatto successivo. Il salvataggio è automatico.</p>');
   h+=groups().map(function(g,gi){
     return'<h2 class="gh">'+esc(g.t)+' <span class="cnt" id="sg-'+gi+'"></span></h2><div class="card st"><div class="srow shead"><span>Piatto</span><span>Pezzi venduti</span><span>Prezzo</span><span>Incasso</span></div>'
       +g.rs.map(function(r){var q=((S.sales||{})[r.id]||{})[m]||'';var p=num(r.price);
@@ -1039,9 +1051,66 @@ function venditeHTML(){
   }).join('');
   return h;
 }
+/* ---------- andamento vendite: mese su mese, trimestre su trimestre, anno su anno ---------- */
+var MBR=['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+function trendKey(m,g){var y=m.slice(0,4),mo=+m.slice(5,7);return g==='y'?y:g==='q'?y+'-T'+Math.ceil(mo/3):m}
+function trendLabel(k,g){return g==='y'?k:g==='q'?k.slice(5)+' '+k.slice(0,4):MBR[+k.slice(5,7)-1]+' '+k.slice(2,4)}
+function trendLong(k,g){return g==='y'?'anno '+k:g==='q'?k.slice(6)+'° trimestre '+k.slice(0,4):mLabel(k)}
+function trendYoY(k,g){if(g==='y')return String(+k-1);if(g==='q')return(+k.slice(0,4)-1)+k.slice(4);return mAdd(k,-12)}
+function trendData(){
+  var T=route.tr||(route.tr={g:'m',k:'q',cat:''}),G=groups(),g=G.filter(function(x){return x.t===T.cat})[0],rs=g?g.rs:S.recipes,ms=salesMonths();
+  if(!ms.length)return null;
+  var all=[],m=ms[0];while(m<=ms[ms.length-1]){all.push(m);m=mAdd(m,1)}
+  var val={},net={};rs.forEach(function(r){var c=calcR(r);net[r.id]=c.net>0?c.net:0});
+  all.forEach(function(mm){var k=trendKey(mm,T.g);if(!(k in val))val[k]=0;rs.forEach(function(r){var q=((S.sales||{})[r.id]||{})[mm]||0;val[k]+=T.k==='i'?q*net[r.id]:q})});
+  var keys=Object.keys(val).sort(),max=T.g==='m'?12:T.g==='q'?8:6;
+  var sumRange=function(a,b){var t=0;rs.forEach(function(r){var s=(S.sales||{})[r.id]||{};Object.keys(s).forEach(function(mm){if(mm>=a&&mm<=b)t+=T.k==='i'?s[mm]*net[r.id]:s[mm]})});return t};
+  return{T:T,keys:keys.slice(-max),val:val,hidden:Math.max(0,keys.length-max),last:ms[ms.length-1],sumRange:sumRange};
+}
+function trendHTML(){
+  var T=route.tr||(route.tr={g:'m',k:'q',cat:''});
+  var sel=function(k,opts){return'<select data-keep class="csel" onchange="route.tr.'+k+'=this.value;drawTrend()">'+opts.map(function(o){return'<option value="'+esc(o[0])+'"'+(T[k]===o[0]?' selected':'')+'>'+esc(o[1])+'</option>'}).join('')+'</select>'};
+  return'<div class="card"><div class="trh"><h3 class="ch" style="margin:0">Andamento vendite</h3><div class="trc">'
+    +sel('g',[['m','Mese su mese'],['q','Trimestre su trimestre'],['y','Anno su anno']])
+    +sel('k',[['q','Pezzi venduti'],['i','Incasso (IVA escl.)']])
+    +sel('cat',[['','Tutto il menu']].concat(groups().map(function(g){return[g.t,g.t]})))
+    +'</div></div><div id="trend"></div></div>';
+}
+function drawTrend(){
+  var el=document.getElementById('trend');if(!el)return;var D=trendData();
+  if(!D){el.innerHTML='<p class="mut cnote">Il grafico compare quando inserisci le vendite.</p>';return}
+  var T=D.T,ks=D.keys,v=D.val,fmt=function(x){return T.k==='i'?eur0(x):Math.round(x).toLocaleString('it-IT')};
+  var W=Math.max(300,Math.min(el.clientWidth||600,1100)),H=230,L=12,R=12,Tp=22,B=46,pw=W-L-R,ph=H-Tp-B;
+  var mx=Math.max.apply(null,ks.map(function(k){return v[k]}).concat([1]))*1.12,slot=pw/ks.length,bw=Math.min(56,slot*0.6);
+  var dpct=function(a,b){return b>0?(a-b)/b:null},dtxt=function(d){return d==null?'':(d>0?'+':'')+(d*100).toFixed(1).replace('.',',')+' %'};
+  var s='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Andamento delle vendite">'
+    +'<line class="ax" x1="'+L+'" y1="'+(Tp+ph)+'" x2="'+(L+pw)+'" y2="'+(Tp+ph)+'"/>';
+  var partialY=T.g==='y'&&D.last.slice(5,7)!=='12'?D.last.slice(0,4):null;
+  ks.forEach(function(k,i){
+    var x=L+slot*i+slot/2,h=v[k]/mx*ph,y=Tp+ph-h,prev=k===partialY?D.sumRange((+k-1)+'-01',(+k-1)+'-'+D.last.slice(5,7)):(i?v[ks[i-1]]:v[trendPrevKey(k,T.g)]),d=dpct(v[k],prev),yk=trendYoY(k,T.g),dy=dpct(v[k],v[yk]);
+    var tip=trendLong(k,T.g)+(k===partialY?' (gen–'+MBR[+D.last.slice(5,7)-1]+')':'')+'\n'+fmt(v[k])+(prev!=null&&prev>0?(k===partialY?'\nvs stessi mesi '+(+k-1)+': ':'\nvs periodo precedente: ')+dtxt(d):'')+(T.g!=='y'&&v[yk]>0?'\nvs '+trendLong(yk,T.g)+': '+dtxt(dy):'');
+    s+=(v[k]>0?'<path class="tb'+(i===ks.length-1?' last':'')+'" d="M'+(x-bw/2)+','+(Tp+ph)+'V'+(y+4)+'q0,-4 4,-4h'+(bw-8)+'q4,0 4,4V'+(Tp+ph)+'Z"/>':'')
+      +'<text class="tv" x="'+x+'" y="'+(y-6)+'" text-anchor="middle">'+(v[k]>0?fmt(v[k]):'')+'</text>'
+      +'<text class="tl" x="'+x+'" y="'+(Tp+ph+16)+'" text-anchor="middle">'+trendLabel(k,T.g)+'</text>'
+      +(d!=null?'<text class="td '+(d>0?'up':d<0?'dn':'')+'" x="'+x+'" y="'+(Tp+ph+32)+'" text-anchor="middle">'+dtxt(d)+'</text>':'')
+      +'<rect class="qhit" x="'+(L+slot*i)+'" y="'+Tp+'" width="'+slot+'" height="'+(ph+B)+'" data-tip="'+esc(tip)+'"/>';
+  });
+  s+='</svg>';
+  var lk=ks[ks.length-1],lp=ks.length>1?v[ks[ks.length-2]]:null,ly=v[trendYoY(lk,T.g)];
+  var partial=T.g==='y'&&D.last.slice(0,4)===lk&&D.last.slice(5,7)!=='12',lm=+D.last.slice(5,7);
+  var sum='<p class="trs"><b>'+esc(trendLong(lk,T.g))+(partial?' (anno in corso, gen–'+MBR[lm-1]+')':'')+'</b>: '+fmt(v[lk])
+    +(partial?(function(){var py=String(+lk-1),a=D.sumRange(py+'-01',py+'-'+D.last.slice(5,7));return a>0?' · <span class="'+(v[lk]>=a?'ok':'bad')+'">'+dtxt(dpct(v[lk],a))+'</span> su gen–'+MBR[lm-1]+' '+py+' (a parità di mesi)':''})()
+      :(lp>0?' · <span class="'+(v[lk]>=lp?'ok':'bad')+'">'+dtxt(dpct(v[lk],lp))+'</span> sul periodo precedente':''))
+    +(T.g!=='y'&&ly>0?' · <span class="'+(v[lk]>=ly?'ok':'bad')+'">'+dtxt(dpct(v[lk],ly))+'</span> su '+esc(trendLong(trendYoY(lk,T.g),T.g)):'')+'</p>';
+  el.innerHTML=sum+'<div class="trw">'+s+'</div><p class="mut cnote">Sotto ogni barra la variazione sul periodo precedente; passa sopra una barra per il confronto con lo stesso periodo dell’anno prima.'
+    +(T.k==='i'?' Incasso calcolato ai prezzi di vendita attuali.':'')+(D.hidden?' Mostrati gli ultimi '+ks.length+' periodi.':'')+'</p>';
+}
+function trendPrevKey(k,g){if(g==='y')return String(+k-1);if(g==='q'){var y=+k.slice(0,4),q=+k.slice(6);return q>1?y+'-T'+(q-1):(y-1)+'-T4'}return mAdd(k,-1)}
+
 function paintSales(){
   var m=salesMonthSel(),tq=0,ti=0,n=0;
   groups().forEach(function(g,gi){var gq=0;g.rs.forEach(function(r){var q=((S.sales||{})[r.id]||{})[m]||0,c=calcR(r),inc=c.net>0?c.net*q:0;gq+=q;tq+=q;ti+=inc;if(q)n++;setT('si-'+r.id,q&&c.net>0?eur(inc):'—')});setT('sg-'+gi,gq?gq.toLocaleString('it-IT')+' pezzi':'')});
+  later('trend',drawTrend,250);
   setT('sv-tq',tq.toLocaleString('it-IT'));setT('sv-tn',n+' piatti con vendite');setT('sv-ti',eur0(ti));
 }
 function setSale(inp){
