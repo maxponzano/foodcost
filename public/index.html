@@ -180,7 +180,7 @@ details.tc summary::-webkit-details-marker{display:none}
   <button data-tab="alimenti">Alimenti</button>
   <button data-tab="ricette">Ricette</button>
   <button data-tab="marginalita">Marginalità</button>
-  <button data-tab="menu">Menu eng.</button>
+  <button data-tab="menu">Menù Ingegnerizzato</button>
   <button data-tab="dati">Dati</button>
   <button data-tab="clienti" id="nav-clienti" hidden>Clienti</button>
 </div></nav>
@@ -460,7 +460,7 @@ function recipesList(){
 }
 function recipeEditorHTML(){
   var r=route.recipe;
-  return'<div class="bar"><button data-act="backrecipe">← '+(route.from?{marginalita:'Marginalità',menu:'Menu engineering'}[route.from]:'Ricette')+'</button></div><div class="redit"><div class="rleft">'
+  return'<div class="bar"><button data-act="backrecipe">← '+(route.from?{marginalita:'Marginalità',menu:'Menù Ingegnerizzato'}[route.from]:'Ricette')+'</button></div><div class="redit"><div class="rleft">'
   +'<label>Nome piatto *<input value="'+esc(r.name)+'" oninput="route.recipe.name=this.value" placeholder="es. Calzone"></label>'
   +'<div class="grid2"><label>Tipologia<select onchange="route.recipe.type=this.value"><option value="">—</option>'+S.lists.tipologie.map(function(c){return'<option'+(r.type===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select></label>'
   +'<label>Dosi (porzioni della ricetta)<input type="number" inputmode="decimal" value="'+esc(r.portions)+'" oninput="route.recipe.portions=this.value;recalc()"></label></div>'
@@ -517,7 +517,7 @@ function recalc(){
 }
 
 /* ---------- MARGINALITÀ ---------- */
-var SUBS={alimenti:'Anagrafica alimenti e prezzi',ricette:'Ricettario e food cost',marginalita:'Food cost e margini per piatto',menu:'Menu engineering',dati:'Anagrafica attività e liste',clienti:'Pannello clienti'};
+var SUBS={alimenti:'Anagrafica alimenti e prezzi',ricette:'Ricettario e food cost',marginalita:'Food cost e margini per piatto',menu:'Menù Ingegnerizzato',dati:'Anagrafica attività e liste',clienti:'Pannello clienti'};
 function subt(){
   var e0=document.getElementById('sub');
   if(route.tab==='clienti'||!S){if(e0)e0.textContent=route.tab==='clienti'?SUBS.clienti:'';return}
