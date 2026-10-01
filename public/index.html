@@ -238,7 +238,11 @@ details.tc summary::-webkit-details-marker{display:none}
 .irow .iq{text-align:right;font-variant-numeric:tabular-nums}
 .irow select{min-height:34px;padding:4px 8px;font-size:13px}
 .ist{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;text-align:right}
-.ist.saved{color:var(--mut)}.ist.auto{color:var(--acc)}.ist.none{color:var(--warn)}.ist.gen,.ist.skip{color:var(--mut)}.ist.manual{color:var(--ok)}
+.ist.saved{color:var(--mut)}.ist.auto{color:var(--acc)}.ist.none{color:var(--warn)}.ist.gen,.ist.skip{color:var(--mut)}.ist.pend{color:var(--warn)}
+.irow.pend{background:color-mix(in srgb,var(--warn) 12%,transparent);margin:0 -12px;padding:5px 12px;border-left:3px solid var(--warn)}
+.irow.pend select{border-color:var(--warn)}
+.ig>summary b.warn{color:var(--warn);font-weight:600}
+.ionly{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);margin:0 0 10px}.ionly input{width:auto;min-height:0}.ist.manual{color:var(--ok)}
 .iwk{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px}.iwk label{display:inline;margin:0;font-size:13px}.iwk input{width:76px;min-height:36px;padding:4px 8px}
 @media (max-width:640px){.irow{grid-template-columns:1fr 50px}.irow select{grid-column:1/-1}.ist{display:none}}
 .srow{display:grid;grid-template-columns:1fr 110px 80px 96px 84px;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);font-size:14px}
@@ -1195,13 +1199,13 @@ function cassaParse(txt,fname){
   var A=S.salesAliases||{};
   items.forEach(function(x){
     var key=x.name.toLowerCase();
-    if(key in A&&(A[key]===''||recipeById(A[key]))){x.rid=A[key];x.st='saved'}
-    else if(cnorm(x.rep)==='vendita a gruppo'){x.rid='';x.st='gen'}
+    if(key in A&&(A[key]===''||recipeById(A[key]))){x.rid=A[key]||'-';x.st='saved'}
+    else if(cnorm(x.rep)==='vendita a gruppo'){x.rid='-';x.st='gen'}
     else{var sg=csuggest(x.name,x.rep||x.group);x.rid=sg?sg.id:'';x.st=sg?'auto':'none'}
   });
   // gruppi della cassa senza nessun piatto riconosciuto (bevande, coperti…): ignorati senza segnalarli
-  var hit={};items.forEach(function(x){if(x.rid)hit[x.group]=1});
-  items.forEach(function(x){if(x.st==='none'&&!hit[x.group])x.st='skip'});
+  var hit={};items.forEach(function(x){if(x.rid&&x.rid!=='-')hit[x.group]=1});
+  items.forEach(function(x){if(x.st==='none'&&!hit[x.group]){x.st='skip';x.rid='-'}});
   var week=dal!=null?wkOfUTC(dal):salesWeekSel(),warn='';
   if(dal==null)warn='Nel file non trovo le date “Dal / Al”: scegli tu la settimana.';
   else if(new Date(dal).getUTCDay()!==1||(al!=null&&Math.round((al-dal)/864e5)!==6))warn='Attenzione: il periodo del file non va da lunedì a domenica. Controlla la settimana.';
@@ -1214,34 +1218,39 @@ function cassaFile(inp){
     route.imp=cassaParse(txt.replace(/^﻿/,''),f.name);render();
   }).catch(function(e){toast(e.message||'File non leggibile.')});
 }
-var IST={saved:'ricordato',auto:'proposto',none:'non trovato',gen:'generico',skip:'ignorato',manual:'scelto'};
-function impSet(i,v){var x=route.imp.items[i];x.rid=v;x.st='manual';impRefresh()}
+var IST={saved:'ricordato',auto:'proposto',none:'da assegnare',gen:'generico',skip:'ignorato',manual:'scelto'};
+function isRec(v){return v&&v!=='-'}
+function impSet(i,v){var x=route.imp.items[i];x.rid=v;x.st=v?'manual':'none';impRefresh()}
 function impWeek(){var y=Math.round(num(val('iwy'))),w=Math.round(num(val('iwn')));if(y>=2000&&y<=2100&&w>=1){route.imp.week=wkKey(y,Math.min(w,isoWeeksIn(y)))}impRefresh()}
 function impRefresh(){var sh=document.querySelector('#sheet .sheet'),y=sh?sh.scrollTop:0;document.getElementById('sheet').innerHTML=impSheetHTML();sh=document.querySelector('#sheet .sheet');if(sh)sh.scrollTop=y}
 function impSheetHTML(){
   var I=route.imp,f=function(n){return n.toLocaleString('it-IT')},G=[],gi={};
   var opts=groups().map(function(g){return'<optgroup label="'+esc(g.t)+'">'+g.rs.map(function(r){return'<option value="'+r.id+'">'+esc(r.name)+'</option>'}).join('')+'</optgroup>'}).join('');
   I.items.forEach(function(x,i){var k=x.group||'Altro';if(!(k in gi)){gi[k]=G.length;G.push({t:k,rows:[]})}G[gi[k]].rows.push(i)});
-  var mq=0,mr=0,ig=0,nf=0,rec={};I.items.forEach(function(x){if(x.rid){mq+=x.qty;mr++;rec[x.rid]=1}else{ig++;if(x.st==='none')nf++}});
+  var mq=0,mr=0,ig=0,np=0,pq=0,rec={};I.items.forEach(function(x){if(isRec(x.rid)){mq+=x.qty;mr++;rec[x.rid]=1}else if(x.rid==='-')ig++;else{np++;pq+=x.qty}});
+  if(!np)I.only=false;
   var wk=+I.week.slice(6),dd=function(ms){var d=new Date(ms);return d.getUTCDate()+' '+MBR[d.getUTCMonth()]+' '+d.getUTCFullYear()};
   var h='<div class="sheet-bg" data-act="closebg"><div class="sheet wide"><h2>Importa vendite dalla cassa</h2>'
     +'<p class="mut" style="margin:-4px 0 10px">File <b>'+esc(I.file)+'</b>'+(I.dal!=null?' · dal '+dd(I.dal)+(I.al!=null?' al '+dd(I.al):''):'')+'</p>'
     +'<div class="iwk"><label for="iwn">Settimana</label><input id="iwn" type="number" min="1" max="53" value="'+wk+'" onchange="impWeek()"><input id="iwy" type="number" min="2000" max="2100" value="'+I.week.slice(0,4)+'" onchange="impWeek()" aria-label="Anno"><b>'+wkDates(I.week)+'</b><span class="mut">· conta in '+mLabel(wkMonth(I.week))+'</span></div>'
     +(I.warn?'<p class="warn" style="margin:0 0 10px;font-size:14px">'+esc(I.warn)+'</p>':'')
-    +'<div class="tot" style="margin:0 0 10px"><div class="r"><span>Righe abbinate a una ricetta</span><b>'+mr+' righe · '+f(mq)+' pezzi su '+Object.keys(rec).length+' piatti</b></div>'
-    +'<div class="r"><span>Righe ignorate (bevande, coperti, voci senza ricetta)</span><b>'+ig+'</b></div>'
-    +(nf?'<div class="mut" style="font-size:13px">'+nf+' piatt'+(nf===1?'o':'i')+' <b class="warn">non trovat'+(nf===1?'o':'i')+'</b>: se hanno una ricetta, sceglila dal menu; altrimenti lasciali su “Ignora”.</div>':'')+'</div>'
-    +'<p class="mut" style="font-size:13px;margin:0 0 12px">Le vendite già presenti per la settimana '+wk+' vengono sostituite. Gli abbinamenti vengono ricordati: dal prossimo file li ritrovi già fatti.'+(S.salesGrain==='W'?'':' Il cliente passerà all’inserimento per settimana.')+'</p>';
+    +'<div class="tot" style="margin:0 0 10px"><div class="r"><span>Abbinate a una ricetta</span><b>'+mr+' voci · '+f(mq)+' pezzi su '+Object.keys(rec).length+' piatti</b></div>'
+    +'<div class="r"><span>Ignorate (bevande, coperti, voci che non sono piatti)</span><b>'+ig+'</b></div>'
+    +'<div class="r"><span>'+(np?'<b class="warn">Da assegnare</b>':'Da assegnare')+'</span><b'+(np?' class="warn"':'')+'>'+(np?np+' voci · '+f(pq)+' pezzi':'nessuna ✓')+'</b></div>'
+    +(np?'<div class="mut" style="font-size:13px">Per ogni voce gialla scegli la ricetta, oppure <b>“Ignora (non è un piatto)”</b>. Le voci lasciate da assegnare non entrano nelle vendite e te le ripropongo al prossimo file.</div>':'')+'</div>'
+    +(np?'<label class="ionly"><input type="checkbox"'+(I.only?' checked':'')+' onchange="route.imp.only=this.checked;impRefresh()"> Mostra solo le voci da assegnare ('+np+')</label>':'')
+    +'<p class="mut" style="font-size:13px;margin:0 0 12px">Le vendite già presenti per la settimana '+wk+' vengono sostituite. Gli abbinamenti e le voci ignorate vengono ricordati per i prossimi file.'+(S.salesGrain==='W'?'':' Il cliente passerà all’inserimento per settimana.')+'</p>';
   G.forEach(function(g,k){
-    var m=g.rows.filter(function(i){return I.items[i].rid}).length,q=g.rows.reduce(function(t,i){return t+(I.items[i].rid?I.items[i].qty:0)},0);
-    var open=k in I.open?I.open[k]:(m>0||g.rows.some(function(i){return I.items[i].st==='manual'}));
-    h+='<details class="ig"'+(open?' open':'')+' ontoggle="route.imp.open['+k+']=this.open"><summary>'+esc(g.t)+'<span>'+g.rows.length+(g.rows.length===1?' riga · ':' righe · ')+(m?m+' abbinate, '+f(q)+' pezzi':'tutte ignorate')+'</span></summary>'
-      +g.rows.map(function(i){var x=I.items[i];
-        return'<div class="irow"><span>'+esc(x.name)+(x.rep&&x.rep!==x.group?' <em>'+esc(x.rep)+'</em>':'')+'</span><span class="iq">'+f(x.qty)+'</span>'
-          +'<select aria-label="Ricetta per '+esc(x.name)+'" onchange="impSet('+i+',this.value)"><option value="">— Ignora —</option>'+(x.rid?opts.replace('value="'+x.rid+'"','value="'+x.rid+'" selected'):opts)+'</select>'
-          +'<span class="ist '+x.st+'">'+IST[x.st]+'</span></div>'}).join('')+'</details>';
+    var vis=g.rows.filter(function(i){return !I.only||!I.items[i].rid});if(!vis.length)return;
+    var m=g.rows.filter(function(i){return isRec(I.items[i].rid)}).length,p=g.rows.filter(function(i){return !I.items[i].rid}).length,q=g.rows.reduce(function(t,i){return t+(isRec(I.items[i].rid)?I.items[i].qty:0)},0);
+    var open=I.only||(k in I.open?I.open[k]:(m>0||p>0||g.rows.some(function(i){return I.items[i].st==='manual'})));
+    h+='<details class="ig"'+(open?' open':'')+' ontoggle="route.imp.open['+k+']=this.open"><summary>'+esc(g.t)+'<span>'+(p?'<b class="warn">'+p+' da assegnare</b> · ':'')+g.rows.length+(g.rows.length===1?' voce · ':' voci · ')+(m?m+' abbinate, '+f(q)+' pezzi':'tutte ignorate')+'</span></summary>'
+      +vis.map(function(i){var x=I.items[i],sel=function(v){return x.rid===v?' selected':''};
+        return'<div class="irow'+(x.rid?'':' pend')+'"><span>'+esc(x.name)+(x.rep&&x.rep!==x.group?' <em>'+esc(x.rep)+'</em>':'')+'</span><span class="iq">'+f(x.qty)+'</span>'
+          +'<select aria-label="Ricetta per '+esc(x.name)+'" onchange="impSet('+i+',this.value)"><option value=""'+sel('')+'>— Da assegnare —</option><option value="-"'+sel('-')+'>Ignora (non è un piatto)</option>'+(isRec(x.rid)?opts.replace('value="'+x.rid+'"','value="'+x.rid+'" selected'):opts)+'</select>'
+          +'<span class="ist '+(x.rid?x.st:'pend')+'">'+(x.rid?(x.rid==='-'&&x.st==='manual'?'ignorato':IST[x.st]):'da assegnare')+'</span></div>'}).join('')+'</details>';
   });
-  return h+'<div class="acts"><button class="pri" data-act="impgo"'+(mr?'':' disabled')+'>Importa la settimana '+wk+' ('+f(mq)+' pezzi)</button><button data-act="impclose">Annulla</button></div></div></div>';
+  return h+'<div class="acts"><button class="pri" data-act="impgo"'+(mr?'':' disabled')+'>Importa la settimana '+wk+' ('+f(mq)+' pezzi)'+(np?' · '+np+' da assegnare restano fuori':'')+'</button><button data-act="impclose">Annulla</button></div></div></div>';
 }
 /* ---------- andamento vendite: settimana su settimana, mese su mese, trimestre su trimestre, anno su anno ---------- */
 var MBR=['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
@@ -1532,7 +1541,7 @@ document.addEventListener('click',function(e){
   else if(a==='impclose'){route.imp=null;render()}
   else if(a==='impgo'){
     var I=route.imp;if(!I||!isWk(I.week))return;
-    busy(t,api('POST','/sales/import',{period:I.week,rows:I.items.map(function(x){return{name:x.name,recipeId:x.rid||null,qty:x.qty}})})).then(function(d){
+    busy(t,api('POST','/sales/import',{period:I.week,rows:I.items.map(function(x){return{name:x.name,recipeId:isRec(x.rid)?x.rid:null,qty:x.qty,ignore:x.rid==='-'&&(x.st==='saved'||x.st==='manual')}})})).then(function(d){
       route.imp=null;route.sw=I.week;route.tr=null;return loadData().then(function(){render();toast('Importati '+num(d.qty).toLocaleString('it-IT')+' pezzi su '+d.recipes+' piatti nella '+wkLabel(I.week).split(' · ')[0]+'.')});
     }).catch(showErr)}
   else if(a==='sresetgo'){

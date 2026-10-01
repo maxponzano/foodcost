@@ -343,7 +343,7 @@ section("Vendite settimanali e azzeramento");
   r = await A.post("/sales/reset", { scope: "all" });
   ok(r.status === 200 && Object.keys((await A.get("/data")).data.sales).length === 0, "azzera tutte le vendite del cliente");
   // importazione dalla cassa
-  const imp = { period: "2026-W01", rows: [{ name: "Classico 200 gr", recipeId: r1, qty: 21 }, { name: "Classico 100 gr", recipeId: r1, qty: 23 }, { name: "Coca Cola", recipeId: null, qty: 18 }, { name: "Pulled", recipeId: r2, qty: 0 }] };
+  const imp = { period: "2026-W01", rows: [{ name: "Classico 200 gr", recipeId: r1, qty: 21 }, { name: "Classico 100 gr", recipeId: r1, qty: 23 }, { name: "Coca Cola", recipeId: null, qty: 18, ignore: true }, { name: "Tomino", recipeId: null, qty: 1 }, { name: "Pulled", recipeId: r2, qty: 0 }] };
   ok((await A.post("/sales/import", imp)).status === 403, "il cliente non può importare dalla cassa");
   ok((await max.post("/sales/import", { ...imp, period: "2026-01" }, { tenant: tA.id })).status === 400, "importazione solo per settimana");
   ok((await max.post("/sales/import", { ...imp, rows: [{ name: "x", recipeId: rB, qty: 1 }] }, { tenant: tA.id })).status === 403, "non si importa su un piatto di un altro cliente");
@@ -353,6 +353,9 @@ section("Vendite settimanali e azzeramento");
   ok(r.status === 200 && dd.sales[r1]["2026-W01"] === 44, "le righe abbinate allo stesso piatto si sommano (21 + 23)");
   ok(!dd.sales[r2] || dd.sales[r2]["2026-W01"] === undefined, "l'importazione sostituisce la settimana");
   ok(dd.salesAliases["classico 100 gr"] === r1 && dd.salesAliases["coca cola"] === "", "abbinamenti e righe ignorate ricordati");
+  ok(!("tomino" in dd.salesAliases), "una voce non assegnata non viene ricordata come ignorata");
+  await max.post("/sales/import", { period: "2026-W02", rows: [{ name: "Coca Cola", recipeId: null, qty: 3 }] }, { tenant: tA.id });
+  ok(!("coca cola" in (await max.get("/data", { tenant: tA.id })).data.salesAliases), "rimettendo una voce su \"da assegnare\" l'abbinamento si cancella");
   ok((await A.get("/data")).data.salesAliases === undefined, "il cliente non riceve gli abbinamenti della cassa");
   await max.post("/sales/reset", { scope: "all" }, { tenant: tA.id });
   await A.put("/sales", { period: "2026-W40", items: [{ recipeId: r1, qty: 7 }] });
