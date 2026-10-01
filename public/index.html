@@ -514,7 +514,8 @@ function recalc(){
       if(!row.name)me.textContent='';
       else if(!f)me.innerHTML='<span class="warn">'+(row.subId?'Ricetta non trovata':'Alimento o ricetta non trovato')+'</span>';
       else if(!ui)me.innerHTML='<span class="warn">'+(row.subId?'Ricetta senza costo (o usata in un ciclo)':'Alimento senza prezzo valido')+'</span>';
-      else me.textContent=(row.subId?'Ricetta · costo ':'Costo base ')+eurp(ui.disp)+ui.label;
+      else me.innerHTML=esc((row.subId?'Ricetta · costo ':'Costo base ')+eurp(ui.disp)+ui.label)
+        +(row.subId?'':' · <span class="rlink" data-act="ingfood" data-id="'+esc(row.foodId)+'">apri scheda alimento</span>');
     }
   });
   var t=recipeTotal(r),d=num(r.portions)>0?num(r.portions):1,dose=t.total/d;
@@ -873,6 +874,7 @@ document.addEventListener('click',function(e){
   if(!S)return;
   if(a==='newfood'){var lf=lockFood();if(lf){showLock(lf);return}route.food={id:uid(),isNew:true,name:'',category:'',supplier:'',unit:'kg',mode:'max',packQty:'',packUnit:'g',history:[]};render()}
   else if(a==='editfood'){route.food=clone(foodById(id));render()}
+  else if(a==='ingfood'){var fi=foodById(id);if(!fi)return;route.food=clone(fi);render()}
   else if(a==='bulkmode'){if(RO)return;var vf=visibleFoods();if(!vf.length){toast('Nessun alimento in elenco.');return}
     route.bulk={mode:vf.every(function(f){return f.mode==='avg'})?'max':'avg'};render()}
   else if(a==='bulkpick'){route.bulk.mode=t.dataset.m;render()}
