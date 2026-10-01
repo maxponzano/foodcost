@@ -1,4 +1,6 @@
-# Food Cost (multi-cliente)
+# Menù Lab
+
+Food cost e menu engineering per la ristorazione (multi-cliente).
 
 App web per food cost e menu engineering: alimenti, ricette, marginalità e menu engineering, con login e dati separati per ogni cliente.
 

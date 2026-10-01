@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Food Cost</title>
+<title>Menù Lab · Food cost e menu engineering</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231e3a6d'/%3E%3Ctext x='32' y='43' font-family='Arial,sans-serif' font-size='30' font-weight='700' fill='white' text-anchor='middle'%3EFC%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231e3a6d'/%3E%3Ctext x='32' y='43' font-family='Arial,sans-serif' font-size='30' font-weight='700' fill='white' text-anchor='middle'%3EML%3C/text%3E%3C/svg%3E">
 <style>
 :root{--c1:#2a78d6;--c2:#eb6834;--c3:#1baf7a;--c4:#eda100;--c5:#e87ba4;--c6:#008300;--q1:#18764a;--q2:#d98b16;--q3:#3c6ebe;--q4:#c0392b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
 --brand:#1e3a6d;--brand-ink:#ffffff;--brand-soft:#b6c7ea;--bar:#1e3a6d;
@@ -251,7 +251,7 @@ details.tc summary::-webkit-details-marker{display:none}
 </style>
 </head>
 <body>
-<header><div class="topbar"><h1>Food Cost <span>· OSM</span></h1><div id="top"></div></div><p id="sub"></p></header>
+<header><div class="topbar"><h1>Menù <span>Lab</span></h1><div id="top"></div></div><p id="sub"></p></header>
 <nav><div class="in">
   <button data-tab="riepilogo">Riepilogo</button>
   <button data-tab="alimenti">Alimenti</button>
@@ -1062,7 +1062,7 @@ function tCard(t){
 var TIPI=null;
 function renderAuth(){
   document.getElementById('top').innerHTML='';document.getElementById('sheet').innerHTML='';
-  document.getElementById('sub').textContent='Food cost e menu engineering';
+  document.getElementById('sub').textContent='Food cost e menu engineering per la ristorazione';
   var app=document.getElementById('app'),m=route.authMsg?'<div class="'+(route.authOk?'info':'lockmsg')+'">'+esc(route.authMsg)+'</div>':'';
   if(route.auth==='register'){
     if(!TIPI){api('GET','/public/tipi').then(function(d){TIPI=d.tipi;renderAuth()}).catch(function(){TIPI=[];renderAuth()})}
