@@ -249,7 +249,8 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
   }
 
   if (path === "/tenant" && m === "PATCH") {
-    // modo di inserimento delle vendite: mensile (M) o settimanale (W)
+    // modo di inserimento delle vendite: mensile (M) o settimanale (W); lo decide solo il super admin
+    if (!s.isSuper) throw forbidden("Solo l'amministratore può cambiare il modo di inserimento delle vendite.");
     const g = String(b.salesGrain || "");
     if (!["M", "W"].includes(g)) throw bad("Modo di inserimento non valido.");
     await q(`UPDATE tenants SET sales_grain=$2 WHERE id=$1`, [tid, g]);
@@ -593,7 +594,7 @@ async function admin(m: string, path: string, b: any, url: URL): Promise<Respons
     return json({
       tenants: ts.map((t) => ({
         id: t.id, ragione: t.ragione_sociale, tipo: t.tipo_attivita, status: t.status, plan: t.plan,
-        maxRecipes: t.max_recipes, canAddFoods: t.can_add_foods, canAddRecipes: t.can_add_recipes,
+        maxRecipes: t.max_recipes, canAddFoods: t.can_add_foods, canAddRecipes: t.can_add_recipes, salesGrain: t.sales_grain === "W" ? "W" : "M",
         recipeCount: Number(t.recipe_count), foodCount: Number(t.food_count), createdAt: t.created_at,
         admins: mem.filter((x) => x.tenant_id === t.id && x.role === "client_admin").map((x) => ({ id: x.id, email: x.email, status: x.status })),
         viewers: mem.filter((x) => x.tenant_id === t.id && x.role === "viewer").map((x) => ({ id: x.id, email: x.email, status: x.status })),
@@ -641,9 +642,10 @@ async function admin(m: string, path: string, b: any, url: URL): Promise<Respons
       const canR = typeof b.canAddRecipes === "boolean" ? b.canAddRecipes : t.can_add_recipes;
       const ragione = str(b.ragione, 200) || t.ragione_sociale;
       const tipo = "tipo" in b ? str(b.tipo, 100) : t.tipo_attivita;
+      const grain = ["M", "W"].includes(b.salesGrain) ? b.salesGrain : t.sales_grain;
       await tx(async (c) => {
-        await c.query(`UPDATE tenants SET status=$2,plan=$3,max_recipes=$4,can_add_foods=$5,can_add_recipes=$6,ragione_sociale=$7,tipo_attivita=$8 WHERE id=$1`,
-          [id, status, plan, max, canF, canR, ragione, tipo]);
+        await c.query(`UPDATE tenants SET status=$2,plan=$3,max_recipes=$4,can_add_foods=$5,can_add_recipes=$6,ragione_sociale=$7,tipo_attivita=$8,sales_grain=$9 WHERE id=$1`,
+          [id, status, plan, max, canF, canR, ragione, tipo, grain]);
         if (status === "approved")
           await c.query(`UPDATE users SET status='active' WHERE status='pending' AND id IN (SELECT user_id FROM memberships WHERE tenant_id=$1)`, [id]);
       });

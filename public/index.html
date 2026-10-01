@@ -1092,7 +1092,7 @@ function venditeHTML(){
   if(!S.recipes.length)return'<div class="empty">Nessuna ricetta.<br>Creale nella sezione Ricette.</div>';
   var W=S.salesGrain==='W',k=curSalesKey();
   var h='<div class="sbar">'
-    +(RO?'':'<select class="csel" aria-label="Modo di inserimento" onchange="setGrain(this.value)"><option value="M"'+(W?'':' selected')+'>Inserimento per mese</option><option value="W"'+(W?' selected':'')+'>Inserimento per settimana</option></select>')
+    +(!S.isSuper?'':'<select class="csel" aria-label="Modo di inserimento" onchange="setGrain(this.value)"><option value="M"'+(W?'':' selected')+'>Inserimento per mese</option><option value="W"'+(W?' selected':'')+'>Inserimento per settimana</option></select>')
     +'<button class="sm" data-act="smprev" aria-label="'+(W?'Settimana':'Mese')+' precedente">‹</button>'
     +(W?'<label class="mut" for="swn">Settimana</label><input data-keep id="swn" class="swn" type="number" min="1" max="53" step="1" value="'+(+k.slice(6))+'" onchange="goWeek()"><input data-keep id="swy" class="swy" type="number" min="2000" max="2100" step="1" value="'+k.slice(0,4)+'" onchange="goWeek()" aria-label="Anno">'
       :'<input data-keep type="month" value="'+k+'" onchange="route.sm=this.value||thisMonth();render()">')
@@ -1299,6 +1299,7 @@ function tCard(t){
     +'<div class="row"><label>Ragione sociale<input id="rg-'+t.id+'" value="'+esc(t.ragione)+'"></label><label>Tipo di attività<select id="tp-'+t.id+'"><option value="">—</option>'+tenOpts(t.tipo)+'</select></label></div>'
     +'<div class="row"><label>Piano<select id="pl-'+t.id+'" onchange="document.getElementById(\'mx-'+t.id+'\').value=this.value===\'pro\'?\'\':20"><option value="basic"'+(t.plan==='basic'?' selected':'')+'>Base</option><option value="pro"'+(t.plan==='pro'?' selected':'')+'>Pro (a pagamento)</option></select></label>'
     +'<label>Limite ricette (vuoto = illimitato)<input type="number" inputmode="numeric" id="mx-'+t.id+'" value="'+(t.maxRecipes==null?'':t.maxRecipes)+'"></label></div>'
+    +'<div class="row"><label>Inserimento vendite<select id="sgr-'+t.id+'"><option value="M"'+(t.salesGrain==='W'?'':' selected')+'>Per mese</option><option value="W"'+(t.salesGrain==='W'?' selected':'')+'>Per settimana (numero ISO)</option></select></label><span></span></div>'
     +'<label class="chk"><input type="checkbox" id="cf-'+t.id+'"'+(t.canAddFoods?' checked':'')+'> Può inserire alimenti</label>'
     +'<label class="chk"><input type="checkbox" id="cr-'+t.id+'"'+(t.canAddRecipes?' checked':'')+'> Può creare ricette</label>'
     +'<div class="acts"><button class="pri" data-act="tsave" data-id="'+t.id+'">Salva</button><button data-act="twork" data-id="'+t.id+'">Lavora su questo cliente</button>'
@@ -1388,7 +1389,7 @@ document.addEventListener('click',function(e){
   if(a==='tsave'){
     ADM.open=id;var mx=val('mx-'+id);
     busy(t,api('PUT','/admin/tenants/'+id,{ragione:val('rg-'+id),tipo:val('tp-'+id),plan:val('pl-'+id),maxRecipes:mx===''?null:mx,
-      canAddFoods:document.getElementById('cf-'+id).checked,canAddRecipes:document.getElementById('cr-'+id).checked}))
+      canAddFoods:document.getElementById('cf-'+id).checked,canAddRecipes:document.getElementById('cr-'+id).checked,salesGrain:val('sgr-'+id)}))
       .then(function(){toast('Cliente aggiornato.');return admReload()}).then(function(){if(CUR===id)return reload()}).catch(showErr);return}
   if(a==='tdelete'){if(armed(t,'Tocca ancora: elimina tutti i suoi dati'))busy(t,api('DELETE','/admin/tenants/'+id,{})).then(function(){if(CUR===id){CUR=null;S=null;lsSet('fc:tenant',null)}return admReload()}).catch(showErr);return}
   if(a==='twork'){switchTenant(id);return}
