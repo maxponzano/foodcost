@@ -6,7 +6,7 @@
 <title>Menù Lab · Food cost e menu engineering</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231e3a6d'/%3E%3Ctext x='32' y='43' font-family='Arial,sans-serif' font-size='30' font-weight='700' fill='white' text-anchor='middle'%3EML%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231e3a6d'/%3E%3Cpath d='M14 41a18 18 0 0 1 36 0' fill='none' stroke='%23fff' stroke-width='5.5' stroke-linecap='round'/%3E%3Crect x='9' y='44' width='46' height='5.5' rx='2.75' fill='%23fff'/%3E%3Cpath d='M32 12.5l6 9.5h-12z' fill='%23e0237f' stroke='%23e0237f' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
 :root{--c1:#2a78d6;--c2:#eb6834;--c3:#1baf7a;--c4:#eda100;--c5:#e87ba4;--c6:#008300;--q1:#18764a;--q2:#d98b16;--q3:#3c6ebe;--q4:#c0392b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
 --brand:#1e3a6d;--brand-ink:#ffffff;--brand-soft:#b6c7ea;--bar:#1e3a6d;
@@ -21,6 +21,18 @@ h1,h2{font-family:var(--f-head);font-weight:700;margin:0;letter-spacing:-.01em}
 header{background:var(--brand);color:var(--brand-ink);padding:14px max(16px,calc((100% - 1200px)/2)) 12px;border-bottom:3px solid var(--acc)}
 header h1{font-size:22px;font-weight:800;letter-spacing:.01em}
 header h1 span{color:var(--brand-soft);font-weight:600}
+header h1.brand{display:flex;align-items:center;gap:8px}
+header h1 .bt{color:#fff}
+header h1 .bt span{color:var(--brand-soft)}
+header h1 .logo{width:30px;height:30px;color:#fff;flex:0 0 30px}
+header h1 small{font-family:var(--f-body);font-size:11px;font-weight:600;color:var(--brand-soft);letter-spacing:.06em;text-transform:uppercase;border-left:1px solid rgba(255,255,255,.3);padding-left:8px;margin-left:2px}
+.authbrand{display:flex;flex-direction:column;align-items:center;gap:4px;margin:4px 0 16px;text-align:center}
+.authbrand svg{width:64px;height:64px;color:var(--brand)}
+.authbrand b{font-family:var(--f-head);font-size:24px;font-weight:800;color:var(--brand)}
+.authbrand b span{color:var(--acc)}
+.authbrand em{font-style:normal;font-size:12px;color:var(--mut);letter-spacing:.06em;text-transform:uppercase}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .authbrand svg,:root:not([data-theme="light"]) .authbrand b{color:var(--brand-soft)}}
+:root[data-theme="dark"] .authbrand svg,:root[data-theme="dark"] .authbrand b{color:var(--brand-soft)}
 header p{margin:2px 0 0;color:var(--brand-soft);font-size:13px}
 main{max-width:760px;margin:0 auto;padding:8px 16px 24px}
 .bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
@@ -133,6 +145,7 @@ details.tc summary::-webkit-details-marker{display:none}
 .qchart .dot{stroke:var(--card);stroke-width:2}
 .qchart .qhit{fill:transparent;cursor:pointer}
 .qchart .dot.on{stroke:var(--ink);stroke-width:2.5}
+.qchart .dot.ex{fill-opacity:.35;stroke-dasharray:2 2;stroke:var(--mut)}
 .qwrap{display:flex;flex-direction:column;gap:10px}
 .qwrap.side{flex-direction:row;align-items:flex-start;gap:16px}
 .qplot{min-width:0}
@@ -279,7 +292,7 @@ details.tc summary::-webkit-details-marker{display:none}
 </style>
 </head>
 <body>
-<header><div class="topbar"><h1>Menù <span>Lab</span></h1><div id="top"></div></div><p id="sub"></p></header>
+<header><div class="topbar"><h1 class="brand"><svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><path d="M10 31a14 14 0 0 1 28 0" fill="none" stroke="currentColor" stroke-width="4.2" stroke-linecap="round"/><rect x="6" y="33.5" width="36" height="4.2" rx="2.1" fill="currentColor"/><path d="M24 9.5l4.6 7.3h-9.2z" fill="var(--acc)" stroke="var(--acc)" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="bt">Menù <span>Lab</span></span><small>by EDAC</small></h1><div id="top"></div></div><p id="sub"></p></header>
 <nav><div class="in">
   <button data-tab="riepilogo">Riepilogo</button>
   <button data-tab="alimenti">Alimenti</button>
@@ -707,7 +720,7 @@ function menuHTML(){
   +'<p><b>Fuoriclasse</b>: vende e rende sopra media. <b>Instancabili</b>: vende molto, rende poco. <b>Diamanti grezzi</b>: rende ma vende poco. <b>Rami secchi</b>: né l’uno né l’altro. “Veloci” = tempo sotto la media della categoria.</p><p>Nel <b>grafico</b> ogni puntino è un piatto: più è a destra più guadagni per piatto, più è in alto più ne vendi. Le linee tratteggiate sono le medie della categoria.</p></details>'
   +groups().map(function(g,gi){
     return'<h2 class="gh">'+esc(g.t)+'</h2><div class="card mt m9"><div class="qchart" id="qc-'+gi+'"></div><div class="thead"><span>Piatto</span><div><span>Venduto</span><span>Tempo min</span><span>Margine €</span><span>Margine %</span><span>Moltipl.</span><span>Incasso</span><span>Food cost tot.</span><span>Margine tot.</span><span>% su categ.</span></div></div>'+g.rs.map(function(r){
-      return'<div class="mrow"><div class="mname"><div class="mh"><b class="rlink" data-act="openrecipe" data-id="'+r.id+'" title="Apri la ricetta">'+esc(r.name)+'</b><span class="badge" id="bd-'+r.id+'"></span></div><div class="mut" id="bh-'+r.id+'" style="margin-top:2px"></div></div>'
+      return'<div class="mrow'+(r.inAvg===false?' noavg':'')+'"><div class="mname"><div class="mh"><b class="rlink" data-act="openrecipe" data-id="'+r.id+'" title="Apri la ricetta">'+esc(r.name)+'</b><span class="badge" id="bd-'+r.id+'"></span></div>'+(r.inAvg===false?'<div class="mut" style="font-size:11px">escluso dalle medie (Marginalità)</div>':'')+'<div class="mut" id="bh-'+r.id+'" style="margin-top:2px"></div></div>'
       +'<div class="kgrid"><div class="kv"><span class="kl">Venduto (n.)</span><b id="xv-'+r.id+'"></b></div>'
       +'<label><span class="kl">Tempo prep.+serv. (min)</span><input type="number" inputmode="decimal" value="'+esc(r.time||'')+'" oninput="setMenu(\''+r.id+'\',\'time\',this.value)"></label>'
       +'<div class="kv"><span class="kl">Margine € (netto)</span><b id="xg-'+r.id+'"></b></div>'
@@ -759,8 +772,9 @@ function drawQuadrant(gi,it,aJ,aG,aK){
   var dots='',hits='',cnt={'++':0,'+-':0,'-+':0,'--':0};
   it.forEach(function(x,i){
     var k=(x.sold<aJ?'-':'+')+(x.mg<aG?'-':'+'),qq=QUAD[k];cnt[k]++;var fast=x.tm>0&&x.tm<aK,cx=X(x.mg).toFixed(1),cy=Y(x.sold).toFixed(1);
-    dots+='<circle class="dot" id="qd-'+gi+'-'+i+'" cx="'+cx+'" cy="'+cy+'" r="6" style="fill:var('+qq[1]+')"/>';
-    hits+='<circle class="qhit" cx="'+cx+'" cy="'+cy+'" r="14" data-d="qd-'+gi+'-'+i+'" data-n="'+esc(x.r.name)+'" data-t="'+esc(qq[0]+(fast?' veloci':''))+'" data-m="'+esc(eur(x.mg))+'" data-s="'+Math.round(x.sold)+'"/>';
+    var ex=x.r.inAvg===false;
+    dots+='<circle class="dot'+(ex?' ex':'')+'" id="qd-'+gi+'-'+i+'" cx="'+cx+'" cy="'+cy+'" r="6" style="fill:var('+qq[1]+')"/>';
+    hits+='<circle class="qhit" cx="'+cx+'" cy="'+cy+'" r="14" data-d="qd-'+gi+'-'+i+'" data-n="'+esc(x.r.name+(ex?' (escluso dalle medie)':''))+'" data-t="'+esc(qq[0]+(fast?' veloci':''))+'" data-m="'+esc(eur(x.mg))+'" data-s="'+Math.round(x.sold)+'"/>';
   });
   var LG=[['++','--q1','Fuoriclasse','vende e rende sopra la media'],['+-','--q2','Instancabili','vende molto, rende poco'],['-+','--q3','Diamanti grezzi','rende bene, vende poco'],['--','--q4','Rami secchi','vende poco e rende poco']];
   el.innerHTML='<div class="qwrap'+(side?' side':'')+'"><div class="qplot">'+h+dots+hits+'</svg></div><div class="qbox"><b class="qbt">Legenda</b>'
@@ -787,10 +801,10 @@ function paintMenu(){
   drawPareto();drawTopSold();
   groups().forEach(function(g,gi){
     var it=g.rs.map(function(r){var c=calcR(r);return{r:r,c:c,sold:num(r.sold),tm:num(r.time),net:c.net,fc:c.dose,mg:c.net>0?c.net-c.dose:0}});
-    var ok=it.filter(function(x){return x.net>0&&x.c.ok});
-    var aJ=avgOf(ok.filter(function(x){return x.sold>0}).map(function(x){return x.sold}));
-    var aG=avgOf(ok.filter(function(x){return x.mg>0}).map(function(x){return x.mg}));
-    var aK=avgOf(ok.filter(function(x){return x.tm>0}).map(function(x){return x.tm}));
+    var ok=it.filter(function(x){return x.net>0&&x.c.ok}),okA=ok.filter(function(x){return x.r.inAvg!==false});
+    var aJ=avgOf(okA.filter(function(x){return x.sold>0}).map(function(x){return x.sold}));
+    var aG=avgOf(okA.filter(function(x){return x.mg>0}).map(function(x){return x.mg}));
+    var aK=avgOf(okA.filter(function(x){return x.tm>0}).map(function(x){return x.tm}));
     var tInc=0,tFc=0,tMg=0;
     ok.forEach(function(x){tInc+=x.net*x.sold;tFc+=x.fc*x.sold;tMg+=x.mg*x.sold});
     it.forEach(function(x){
@@ -805,7 +819,8 @@ function paintMenu(){
       setT('xt-'+id,has&&x.sold>0?eur(x.mg*x.sold):'—');setT('xs-'+id,has&&x.sold>0&&tMg>0?pct(x.mg*x.sold/tMg):'—');
     });
     drawQuadrant(gi,ok.filter(function(x){return x.sold>0}),aJ,aG,aK);
-    setT('xa-'+gi,ok.length?'Medie · venduto '+aJ.toFixed(0)+' · margine '+eur(aG)+(aK?' · tempo '+aK.toFixed(1).replace('.',',')+' min':'')+'  |  Totali · incasso '+eur(tInc)+' · food cost '+eur(tFc)+' · margine '+eur(tMg):'Inserisci i prezzi in Marginalità per vedere medie e totali');
+    var nEx=ok.length-okA.length;
+    setT('xa-'+gi,ok.length?'Medie'+(nEx?' (senza '+nEx+' piatt'+(nEx===1?'o escluso':'i esclusi')+')':'')+' · venduto '+aJ.toFixed(0)+' · margine '+eur(aG)+(aK?' · tempo '+aK.toFixed(1).replace('.',',')+' min':'')+'  |  Totali · incasso '+eur(tInc)+' · food cost '+eur(tFc)+' · margine '+eur(tMg):'Inserisci i prezzi in Marginalità per vedere medie e totali');
   });
 }
 
@@ -850,14 +865,14 @@ function aggregate(list){
 
 /* ---------- 1. RIEPILOGO ---------- */
 function riepHTML(){
-  var D=dishes(),A=aggregate(D);
+  var D=dishes(),A=aggregate(D),DA=D.filter(function(x){return x.r.inAvg!==false}),AA=aggregate(DA.length?DA:D),nEx=D.length-DA.length;
   if(!S.recipes.length)return'<div class="empty">Nessuna ricetta.<br>Creale nella sezione Ricette.</div>';
   if(!D.length)return'<div class="empty">Per il riepilogo servono ricette con ingredienti e prezzo di vendita.<br>Inserisci i prezzi in Marginalità.</div>';
   var tile=function(lbl,val,sub,cls){return'<div class="kpi"><span>'+lbl+'</span><b class="'+(cls||'')+'">'+val+'</b><em>'+sub+'</em></div>'};
   var h=periodBarHTML()+'<div class="kpis">'
-    +tile('Food cost medio',fmtPct(A.fcPct),A.useSold?'pesato sul venduto':'media semplice (manca il venduto)',fcClass(A.fcPct))
+    +tile('Food cost medio',fmtPct(AA.fcPct),(A.useSold?'pesato sul venduto':'media semplice (manca il venduto)')+(nEx?' · senza '+nEx+(nEx===1?' escluso':' esclusi'):''),fcClass(AA.fcPct))
     +tile(A.useSold?'Incasso (IVA escl.)':'Prezzo medio IVA escl.',A.useSold?eur0(A.inc):eur(A.inc/A.n),A.useSold?A.sold.toLocaleString('it-IT')+' piatti venduti':D.length+' piatti con prezzo')
-    +tile(A.useSold?'Margine totale':'Margine medio a piatto',A.useSold?eur0(A.mg):eur(A.mgUnit),A.useSold?'margine medio '+eur(A.mgUnit)+' a piatto':'IVA esclusa')
+    +tile(A.useSold?'Margine totale':'Margine medio a piatto',A.useSold?eur0(A.mg):eur(AA.mgUnit),A.useSold?'margine medio '+eur(AA.mgUnit)+' a piatto'+(nEx?' (senza esclusi)':''):'IVA esclusa')
     +tile('Piatti oltre obiettivo',A.over+' <small>su '+A.n+'</small>','food cost sopra il '+S.fcTarget+'%',A.over?'bad':'ok')
     +'</div>';
   // margine per categoria
@@ -1231,7 +1246,7 @@ function renderAuth(){
   var app=document.getElementById('app'),m=route.authMsg?'<div class="'+(route.authOk?'info':'lockmsg')+'">'+esc(route.authMsg)+'</div>':'';
   if(route.auth==='register'){
     if(!TIPI){api('GET','/public/tipi').then(function(d){TIPI=d.tipi;renderAuth()}).catch(function(){TIPI=[];renderAuth()})}
-    app.innerHTML='<form class="card auth" data-form="register"><h2>Registra la tua attività</h2>'+m
+    app.innerHTML='<form class="card auth" data-form="register">'+authBrand()+'<h2>Registra la tua attività</h2>'+m
       +'<label>Email<input type="email" id="r-email" autocomplete="email" required></label>'
       +'<label>Password (almeno 10 caratteri)<input type="password" id="r-pw" autocomplete="new-password" minlength="10" required></label>'
       +'<label>Ripeti la password<input type="password" id="r-pw2" autocomplete="new-password" required></label>'
@@ -1241,7 +1256,7 @@ function renderAuth(){
       +'<div class="acts"><button class="pri" type="submit">Invia richiesta</button></div>'
       +'<button type="button" class="link" data-act="gologin">Hai già un account? Accedi</button></form>';
   }else{
-    app.innerHTML='<form class="card auth" data-form="login"><h2>Accedi</h2>'+m
+    app.innerHTML='<form class="card auth" data-form="login">'+authBrand()+'<h2>Accedi</h2>'+m
       +'<label>Email<input type="email" id="l-email" autocomplete="username" required></label>'
       +'<label>Password<input type="password" id="l-pw" autocomplete="current-password" required></label>'
       +'<div class="acts"><button class="pri" type="submit">Accedi</button></div>'
@@ -1249,6 +1264,7 @@ function renderAuth(){
       +'<p class="mut" style="margin:8px 0 0">Password dimenticata? Contatta l\'amministratore: ti invierà una password provvisoria.</p></form>';
   }
 }
+function authBrand(){return'<div class="authbrand"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 31a14 14 0 0 1 28 0" fill="none" stroke="currentColor" stroke-width="4.2" stroke-linecap="round"/><rect x="6" y="33.5" width="36" height="4.2" rx="2.1" fill="currentColor"/><path d="M24 9.5l4.6 7.3h-9.2z" fill="var(--acc)" stroke="var(--acc)" stroke-width="1.6" stroke-linejoin="round"/></svg><b>Menù <span>Lab</span></b><em>by EDAC</em></div>'}
 function pwSheetHTML(){
   var f=route.pw.forced;
   return'<div class="sheet-bg"'+(f?'':' data-act="closebg"')+'><form class="sheet" data-form="pw"><h2>Cambia password</h2>'
