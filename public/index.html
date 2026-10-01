@@ -133,6 +133,18 @@ details.tc summary::-webkit-details-marker{display:none}
 .qchart .dot{stroke:var(--card);stroke-width:2}
 .qchart .qhit{fill:transparent;cursor:pointer}
 .qchart .dot.on{stroke:var(--ink);stroke-width:2.5}
+.qwrap{display:flex;flex-direction:column;gap:10px}
+.qwrap.side{flex-direction:row;align-items:flex-start;gap:16px}
+.qplot{min-width:0}
+.qbox{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg);font-size:12px;flex:0 0 auto}
+.qwrap.side .qbox{width:190px;margin-top:22px}
+.qbt{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin-bottom:6px}
+.qli{display:flex;gap:8px;align-items:flex-start;padding:4px 0}
+.qli i{width:10px;height:10px;border-radius:50%;flex:0 0 10px;margin-top:3px}
+.qli span{display:block;font-weight:600;color:var(--ink)}
+.qli em{font-style:normal;color:var(--mut);font-weight:600;margin-left:2px}
+.qli small{display:block;color:var(--mut);font-size:11px;line-height:1.3}
+.qbn{margin:6px 0 0;color:var(--mut);font-size:11px;line-height:1.35}
 .qtip{position:absolute;display:none;pointer-events:none;background:var(--ink);color:var(--bg);border-radius:8px;padding:6px 9px;font-size:12px;line-height:1.35;white-space:nowrap;z-index:3;transform:translate(-50%,calc(-100% - 10px))}
 .qleg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--mut);margin-top:4px}
 .qleg span{display:inline-flex;align-items:center;gap:5px}
@@ -226,7 +238,7 @@ details.tc summary::-webkit-details-marker{display:none}
   .mt.m9 .kgrid,.mt.m9 .thead>div{display:grid;grid-template-columns:repeat(9,1fr);gap:8px}
   .thead>div span{text-align:right}
   .mt .mname b{font-size:14px}
-  .qchart{max-width:720px}
+  .qchart{max-width:940px}
   /* editor ricetta su due colonne */
   .redit{display:grid;grid-template-columns:1fr 380px;gap:24px;align-items:start}
   .redit .rright{position:sticky;top:70px}
@@ -687,7 +699,7 @@ function fmtTick(v,step){var d=step<1?2:0;return v.toLocaleString('it-IT',{minim
 function drawQuadrant(gi,it,aJ,aG,aK){
   var el=document.getElementById('qc-'+gi);if(!el)return;
   if(it.length<2){el.innerHTML='<div class="qnote">Il grafico compare quando almeno 2 piatti della categoria hanno prezzo e venduto.</div>';return}
-  var W=Math.max(280,Math.min(el.clientWidth||520,720)),H=W<480?250:300,L=46,R=16,T=26,B=40,pw=W-L-R,ph=H-T-B;
+  var full=el.clientWidth||520,side=full>=640,W=Math.max(280,Math.min(full-(side?206:0),720)),H=W<480?250:300,L=46,R=16,T=26,B=40,pw=W-L-R,ph=H-T-B;
   var mgs=it.map(function(x){return x.mg}),sds=it.map(function(x){return x.sold});
   var mn=Math.min.apply(null,mgs.concat([aG])),mx=Math.max.apply(null,mgs.concat([aG])),pad=Math.max((mx-mn)*0.12,0.25);
   var xt=niceTicks(mn-pad,mx+pad,W<480?3:5),x0=Math.min(mn-pad,xt.ticks[0]),x1=Math.max(mx+pad,xt.ticks[xt.ticks.length-1]);
@@ -712,16 +724,16 @@ function drawQuadrant(gi,it,aJ,aG,aK){
   h+=q(L+pw-8,T+16,'end','--q1','FUORICLASSE')+q(L+8,T+16,'start','--q2','INSTANCABILI')+q(L+pw-8,T+ph-8,'end','--q3','DIAMANTI GREZZI')+q(L+8,T+ph-8,'start','--q4','RAMI SECCHI');
   // titoli degli assi, orizzontali
   h+='<text class="at" x="'+(L+pw)+'" y="'+(H-4)+'" text-anchor="end">Margine per piatto (IVA escl.) →</text><text class="at" x="'+L+'" y="'+(T-8)+'" text-anchor="start">↑ Venduto (pezzi)</text>';
-  var dots='',hits='';
+  var dots='',hits='',cnt={'++':0,'+-':0,'-+':0,'--':0};
   it.forEach(function(x,i){
-    var k=(x.sold<aJ?'-':'+')+(x.mg<aG?'-':'+'),qq=QUAD[k],fast=x.tm>0&&x.tm<aK,cx=X(x.mg).toFixed(1),cy=Y(x.sold).toFixed(1);
+    var k=(x.sold<aJ?'-':'+')+(x.mg<aG?'-':'+'),qq=QUAD[k];cnt[k]++;var fast=x.tm>0&&x.tm<aK,cx=X(x.mg).toFixed(1),cy=Y(x.sold).toFixed(1);
     dots+='<circle class="dot" id="qd-'+gi+'-'+i+'" cx="'+cx+'" cy="'+cy+'" r="6" style="fill:var('+qq[1]+')"/>';
     hits+='<circle class="qhit" cx="'+cx+'" cy="'+cy+'" r="14" data-d="qd-'+gi+'-'+i+'" data-n="'+esc(x.r.name)+'" data-t="'+esc(qq[0]+(fast?' veloci':''))+'" data-m="'+esc(eur(x.mg))+'" data-s="'+Math.round(x.sold)+'"/>';
   });
-  h+=dots+hits+'</svg><div class="qtip"></div><div class="qleg">'
-    +['--q1','--q2','--q3','--q4'].map(function(c,i){return'<span><i style="background:var('+c+')"></i>'+['Fuoriclasse','Instancabili','Diamanti grezzi','Rami secchi'][i]+'</span>'}).join('')
-    +'<span class="mut">· passa sopra un punto per il nome</span></div>';
-  el.innerHTML=h;
+  var LG=[['++','--q1','Fuoriclasse','vende e rende sopra la media'],['+-','--q2','Instancabili','vende molto, rende poco'],['-+','--q3','Diamanti grezzi','rende bene, vende poco'],['--','--q4','Rami secchi','vende poco e rende poco']];
+  el.innerHTML='<div class="qwrap'+(side?' side':'')+'"><div class="qplot">'+h+dots+hits+'</svg></div><div class="qbox"><b class="qbt">Legenda</b>'
+    +LG.map(function(l){return'<div class="qli"><i style="background:var('+l[1]+')"></i><div><span>'+l[2]+' <em>'+cnt[l[0]]+'</em></span><small>'+l[3]+'</small></div></div>'}).join('')
+    +'<p class="qbn">Linee tratteggiate = medie della categoria. Passa sopra un punto per il nome del piatto.</p></div></div><div class="qtip"></div>';
 }
 function qTip(e){
   var w=e.target.closest&&e.target.closest('.qchart');
