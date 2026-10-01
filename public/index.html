@@ -241,15 +241,17 @@ details.tc summary::-webkit-details-marker{display:none}
 .ist.saved{color:var(--mut)}.ist.auto{color:var(--acc)}.ist.none{color:var(--warn)}.ist.gen,.ist.skip{color:var(--mut)}.ist.manual{color:var(--ok)}
 .iwk{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px}.iwk label{display:inline;margin:0;font-size:13px}.iwk input{width:76px;min-height:36px;padding:4px 8px}
 @media (max-width:640px){.irow{grid-template-columns:1fr 50px}.irow select{grid-column:1/-1}.ist{display:none}}
-.srow{display:grid;grid-template-columns:1fr 110px 80px 96px;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);font-size:14px}
+.srow{display:grid;grid-template-columns:1fr 110px 80px 96px 84px;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);font-size:14px}
 .srow:last-child{border-bottom:0}
 .srow.shead{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
 .srow.shead span:nth-child(n+2){text-align:right}
 .srow .sin{min-height:36px;padding:6px 8px;text-align:right}
 .srow .sp,.srow .si{text-align:right;font-feature-settings:"tnum" 1}
 .srow .si{font-weight:600}
+.srow .stt{text-align:right;font-feature-settings:"tnum" 1;color:var(--brand);font-weight:600}
+.srow.shead span.stt{color:var(--brand)}
 .srow .sn em{font-style:normal;font-size:11px}
-@media (max-width:560px){.srow{grid-template-columns:1fr 84px 76px}.srow .sp{display:none}.srow.shead span:nth-child(3){display:none}.kpis3{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.srow{grid-template-columns:1fr 72px 70px 56px;gap:8px}.srow .sp{display:none}.srow.shead span:nth-child(3){display:none}.kpis3{grid-template-columns:1fr 1fr}}
 .trh{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
 .trc{display:flex;gap:6px;flex-wrap:wrap}
 .trc .csel{max-width:none}
@@ -1077,7 +1079,7 @@ function applySales(){
   S.recipes.forEach(function(r){var s=S.msales[r.id]||{},t=0;Object.keys(s).forEach(function(m){if(m>=R.from&&m<=R.to)t+=s[m]});r.sold=t||''});
 }
 function setPer(k,v){route.per=route.per||{mode:'all'};route.per[k]=v;if(k==='mode'&&v==='custom'){var R=periodRange();route.per.from=route.per.from||R.last;route.per.to=route.per.to||R.last}applySales();render()}
-function periodBarHTML(){
+function periodBarHTML(inSales){
   var P=route.per||{mode:'all'},R=periodRange(),ms=salesMonths();
   var tot=S.recipes.reduce(function(s,r){return s+num(r.sold)},0);
   var o=function(v,t){return'<option value="'+v+'"'+(P.mode===v?' selected':'')+'>'+t+'</option>'};
@@ -1085,7 +1087,7 @@ function periodBarHTML(){
     +o('all','Totale di tutte le vendite')+o('last','Ultimo mese con vendite')+o('3m','Ultimi 3 mesi')+o('year','Anno intero')+o('custom','Scegli i mesi…')+'</select>'
     +(P.mode==='custom'?'<label>da<input data-keep type="month" value="'+esc(R.from)+'" onchange="setPer(\'from\',this.value)"></label><label>a<input data-keep type="month" value="'+esc(R.to)+'" onchange="setPer(\'to\',this.value)"></label>':'')
     +'<span class="mut">'+esc(R.label)+' · '+tot.toLocaleString('it-IT')+' piatti venduti'+(ms.length?'':' · nessuna vendita inserita')+'</span>'
-    +(RO?'':'<button class="sm" data-tab="vendite">Inserisci le vendite →</button>')+'</div>';
+    +(RO||inSales?'':'<button class="sm" data-tab="vendite">Inserisci le vendite →</button>')+'</div>';
 }
 /* pagina Vendite: inserimento per mese o per settimana (scelta del cliente) */
 var SPEND={};
@@ -1121,12 +1123,13 @@ function venditeHTML(){
   h+='<div class="kpis kpis3"><div class="kpi"><span>Piatti venduti nell'+(W?'a settimana':' mese')+'</span><b id="sv-tq"></b><em id="sv-tn"></em></div><div class="kpi"><span>Incasso (IVA escl.)</span><b id="sv-ti"></b><em>prezzo di vendita × pezzi</em></div>'
     +'<div class="kpi"><span>'+(W?'Settimane':'Mesi')+' con vendite</span><b id="sv-np"></b><em id="sv-nr"></em></div></div>'
     +trendHTML()
+    +periodBarHTML(true)+'<p class="mut" style="margin:-4px 0 10px;font-size:13px">La colonna <b style="color:var(--brand)">Totale</b> somma le vendite di questo periodo: è lo stesso numero del Menù Ingegnerizzato (il periodo vale per entrambe le pagine).</p>'
     +(RO?'':'<p class="mut" style="margin:12px 0 6px">Scrivi i pezzi venduti e premi <b>Invio</b> per passare al piatto successivo. Il salvataggio è automatico.</p>');
   h+=groups().map(function(g,gi){
-    return'<h2 class="gh">'+esc(g.t)+' <span class="cnt" id="sg-'+gi+'"></span></h2><div class="card st"><div class="srow shead"><span>Piatto</span><span>Pezzi venduti</span><span>Prezzo</span><span>Incasso</span></div>'
+    return'<h2 class="gh">'+esc(g.t)+' <span class="cnt" id="sg-'+gi+'"></span></h2><div class="card st"><div class="srow shead"><span>Piatto</span><span>'+(W?'Settimana':'Mese')+'</span><span>Prezzo</span><span>Incasso</span><span class="stt" title="Stesso periodo del Menù Ingegnerizzato">Totale</span></div>'
       +g.rs.map(function(r){var q=((S.sales||{})[r.id]||{})[k]||'';var p=num(r.price);
         return'<div class="srow"><span class="sn"><b class="rlink" data-act="openrecipe" data-id="'+r.id+'" title="Apri la ricetta">'+esc(r.name)+'</b>'+(p>0?'':' <em class="mut">senza prezzo</em>')+'</span><input class="sin" type="number" inputmode="numeric" min="0" step="1" data-rid="'+r.id+'" value="'+esc(q)+'" oninput="setSale(this)" placeholder="0">'
-          +'<span class="sp">'+(p>0?eur(p):'—')+'</span><span class="si" id="si-'+r.id+'"></span></div>'}).join('')+'</div>';
+          +'<span class="sp">'+(p>0?eur(p):'—')+'</span><span class="si" id="si-'+r.id+'"></span><span class="stt" id="st-'+r.id+'"></span></div>'}).join('')+'</div>';
   }).join('');
   return h;
 }
@@ -1303,7 +1306,7 @@ function trendPrevKey(k,g){if(g==='w')return wkAdd(k,-1);if(g==='y')return Strin
 
 function paintSales(typing){
   var m=curSalesKey(),tq=0,ti=0,n=0;
-  groups().forEach(function(g,gi){var gq=0;g.rs.forEach(function(r){var q=((S.sales||{})[r.id]||{})[m]||0,c=calcR(r),inc=c.net>0?c.net*q:0;gq+=q;tq+=q;ti+=inc;if(q)n++;setT('si-'+r.id,q&&c.net>0?eur(inc):'—')});setT('sg-'+gi,gq?gq.toLocaleString('it-IT')+' pezzi':'')});
+  groups().forEach(function(g,gi){var gq=0;g.rs.forEach(function(r){var q=((S.sales||{})[r.id]||{})[m]||0,c=calcR(r),inc=c.net>0?c.net*q:0;gq+=q;tq+=q;ti+=inc;if(q)n++;setT('si-'+r.id,q&&c.net>0?eur(inc):'—');setT('st-'+r.id,num(r.sold)?num(r.sold).toLocaleString('it-IT'):'—')});setT('sg-'+gi,gq?gq.toLocaleString('it-IT')+' pezzi':'')});
   if(typing)later('trend',drawTrend,250);else drawTrend();
   var W=isWk(m),ps=W?salesWeeks():salesMonths(),f=ps[0],l=ps[ps.length-1];
   setT('sv-np',ps.length);setT('sv-nr',!ps.length?(W?'nessuna':'nessuno'):W?'dalla '+(+f.slice(6))+'/'+f.slice(0,4)+' alla '+(+l.slice(6))+'/'+l.slice(0,4):mLabel(f)+' – '+mLabel(l));
@@ -1530,7 +1533,7 @@ document.addEventListener('click',function(e){
   else if(a==='impgo'){
     var I=route.imp;if(!I||!isWk(I.week))return;
     busy(t,api('POST','/sales/import',{period:I.week,rows:I.items.map(function(x){return{name:x.name,recipeId:x.rid||null,qty:x.qty}})})).then(function(d){
-      route.imp=null;route.sw=I.week;return loadData().then(function(){render();toast('Importati '+num(d.qty).toLocaleString('it-IT')+' pezzi su '+d.recipes+' piatti nella '+wkLabel(I.week).split(' · ')[0]+'.')});
+      route.imp=null;route.sw=I.week;route.tr=null;return loadData().then(function(){render();toast('Importati '+num(d.qty).toLocaleString('it-IT')+' pezzi su '+d.recipes+' piatti nella '+wkLabel(I.week).split(' · ')[0]+'.')});
     }).catch(showErr)}
   else if(a==='sresetgo'){
     if(RO)return;var all=route.sreset.scope==='all',k=curSalesKey();clearTimeout(timers.sales);SPEND={};
