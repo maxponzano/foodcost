@@ -229,6 +229,18 @@ details.tc summary::-webkit-details-marker{display:none}
 .rad input{width:auto;min-height:0;margin-top:3px}
 .surebox{border:1px solid var(--bad);border-radius:10px;padding:10px 12px;margin:12px 0 4px;font-size:14px}
 .surebox b{color:var(--bad);font-family:var(--f-head);letter-spacing:.03em}
+.sheet.wide{max-width:920px}
+.ig{border:1px solid var(--line);border-radius:10px;margin:0 0 8px;padding:0 12px}
+.ig>summary{cursor:pointer;padding:10px 0;font-weight:600;font-size:14px;display:flex;justify-content:space-between;gap:10px}
+.ig>summary span{font-weight:400;color:var(--mut);font-size:13px}
+.irow{display:grid;grid-template-columns:1fr 56px minmax(170px,280px) 92px;gap:8px;align-items:center;padding:5px 0;border-top:1px solid var(--line);font-size:14px}
+.irow em{color:var(--mut);font-style:normal;font-size:12px}
+.irow .iq{text-align:right;font-variant-numeric:tabular-nums}
+.irow select{min-height:34px;padding:4px 8px;font-size:13px}
+.ist{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;text-align:right}
+.ist.saved{color:var(--mut)}.ist.auto{color:var(--acc)}.ist.none{color:var(--warn)}.ist.gen,.ist.skip{color:var(--mut)}.ist.manual{color:var(--ok)}
+.iwk{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px}.iwk label{display:inline;margin:0;font-size:13px}.iwk input{width:76px;min-height:36px;padding:4px 8px}
+@media (max-width:640px){.irow{grid-template-columns:1fr 50px}.irow select{grid-column:1/-1}.ist{display:none}}
 .srow{display:grid;grid-template-columns:1fr 110px 80px 96px;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);font-size:14px}
 .srow:last-child{border-bottom:0}
 .srow.shead{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
@@ -453,7 +465,7 @@ function render(){
   else if(route.tab==='marginalita')app.innerHTML=margHTML();
   else if(route.tab==='menu')app.innerHTML=menuHTML();
   else app.innerHTML=datiHTML();
-  document.getElementById('sheet').innerHTML=route.pw?pwSheetHTML():(route.sreset&&S?sresetSheetHTML():route.bulk&&S?bulkSheetHTML():(route.food&&S?foodSheetHTML():''));
+  document.getElementById('sheet').innerHTML=route.pw?pwSheetHTML():(route.imp&&S?impSheetHTML():route.sreset&&S?sresetSheetHTML():route.bulk&&S?bulkSheetHTML():(route.food&&S?foodSheetHTML():''));
   if(!S||route.tab==='clienti'){}
   else if(route.recipe)recalc();
   else if(route.tab==='marginalita')paintMarg();
@@ -1098,7 +1110,8 @@ function venditeHTML(){
       :'<input data-keep type="month" value="'+k+'" onchange="route.sm=this.value||thisMonth();render()">')
     +'<button class="sm" data-act="smnext" aria-label="'+(W?'Settimana':'Mese')+' successiv'+(W?'a':'o')+'">›</button>'
     +'<b class="smt'+(W?' wk':'')+'">'+(W?wkDates(k):mLabel(k))+'</b><span id="svstat" class="mut"></span>'
-    +(RO?'':'<button class="sm del sres" data-act="sreset">Azzera vendite…</button>')+'</div>';
+    +(S.isSuper?'<button class="sm'+(RO?' sres':'')+'" data-act="impopen" style="margin-left:auto">Importa da cassa (CSV)</button><input type="file" id="cassaf" accept=".csv,text/csv,text/plain" hidden onchange="cassaFile(this)">':'')
+    +(RO?'':'<button class="sm del'+(S.isSuper?'':' sres')+'" data-act="sreset">Azzera vendite…</button>')+'</div>';
   if(W){
     var wm=wkMonth(k),mono=S.recipes.some(function(r){return((S.sales||{})[r.id]||{})[wm]>0});
     h+='<p class="mut wkinfo">La settimana '+(+k.slice(6))+' conta nelle vendite di <b>'+mLabel(wm)+'</b> (il mese con più giorni della settimana).'
@@ -1126,6 +1139,105 @@ function sresetSheetHTML(){
     +rad('all','<b>Tutte le vendite</b> di '+esc(S.tenant.ragione)+'<br><span class="mut">'+f(all)+' pezzi in '+np+' period'+(np===1?'o':'i')+' (mesi e settimane)</span>')
     +'<div class="surebox"><b>SEI SICURO?</b> Le vendite '+(sc==='all'?'di <b>tutti i periodi</b>':'di <b>'+esc(curSalesLabel())+'</b>')+' verranno cancellate definitivamente e non si possono recuperare. Ricette, prezzi e alimenti non vengono toccati.</div>'
     +'<div class="acts"><button class="pri danger" data-act="sresetgo">Sì, azzera'+(sc==='all'?' tutto':'')+'</button><button data-act="sresetclose">Annulla</button></div></div></div>';
+}
+/* ---------- importazione dall'export della cassa (CSV) ---------- */
+var CSTOP={e:1,di:1,al:1,alla:1,allo:1,ai:1,con:1,la:1,il:1,gr:1,g:1,kg:1};
+function cnorm(x){return String(x).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9. ]+/g,' ').trim()}
+function ctoks(x,keepNum){return cnorm(x).split(/\s+/).map(function(t){return t.replace(/\.+$/,'')}).filter(function(t){return t&&!CSTOP[t]&&(keepNum||!/^\d+$/.test(t))})}
+function clev(a,b){var m=a.length,n=b.length,d=[],i,j;for(i=0;i<=m;i++)d[i]=[i];for(j=0;j<=n;j++)d[0][j]=j;
+  for(i=1;i<=m;i++)for(j=1;j<=n;j++){d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));if(i>1&&j>1&&a[i-1]===b[j-2]&&a[i-2]===b[j-1])d[i][j]=Math.min(d[i][j],d[i-2][j-2]+1)}return d[m][n]}
+function ctm(a,b){if(a===b)return 1;var sh=a.length<b.length?a:b,lo=a.length<b.length?b:a;
+  if(lo.indexOf(sh)===0&&(sh.length>=3||a.length===1))return .9;if(sh.length>=6&&clev(a,b)<=1)return .85;return 0}
+/* somiglianza tra il nome in cassa e una ricetta: parole in comune (anche abbreviate o con un errore di battitura) + reparto simile */
+function cscore(cash,rp,r){
+  var A=ctoks(cash),B=ctoks(r.name,true);if(!A.length||!B.length)return 0;
+  var best=function(x,L,f){return Math.max.apply(null,L.map(function(y){return f(x,y)}))};
+  var ca=A.reduce(function(t,a){return t+best(a,B,ctm)},0)/A.length,cb=B.reduce(function(t,b){return t+best(b,A,ctm)},0)/B.length;
+  var ty=cnorm(r.type||''),rr=cnorm(rp||''),bonus=rr&&ty&&(ty.indexOf(rr.slice(0,5))>=0||rr.indexOf(ty.slice(0,5))>=0)?.1:0;
+  return ca*.6+cb*.4+bonus;
+}
+function csuggest(cash,rp){
+  var sc=S.recipes.map(function(r){return[cscore(cash,rp,r),r]}).sort(function(x,y){return y[0]-x[0]});
+  if(!sc.length||sc[0][0]<.6||(sc[1]&&sc[0][0]-sc[1][0]<.05))return null;return sc[0][1];
+}
+function parseCsv(txt,sep){
+  var out=[],row=[],f='',q=false,i,c;
+  for(i=0;i<txt.length;i++){c=txt[i];
+    if(q){if(c==='"'){if(txt[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+    else if(c==='"')q=true;else if(c===sep){row.push(f);f=''}
+    else if(c==='\n'||c==='\r'){if(c==='\r'&&txt[i+1]==='\n')i++;row.push(f);out.push(row);row=[];f=''}
+    else f+=c}
+  if(f||row.length){row.push(f);out.push(row)}return out;
+}
+function cdate(x){var m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(x||'').trim());return m?Date.UTC(+m[3],+m[2]-1,+m[1]):null}
+function cassaParse(txt,fname){
+  var head=txt.slice(0,3000),sep=head.split(';').length>=head.split(',').length?';':',',rows=parseCsv(txt,sep),h=-1,col={};
+  for(var i=0;i<Math.min(rows.length,30)&&h<0;i++){
+    var low=rows[i].map(function(x){return cnorm(x)});
+    var ni=low.indexOf('plu');if(ni<0)ni=low.indexOf('descrizione');if(ni<0)ni=low.indexOf('articolo');
+    var qi=-1;low.forEach(function(x,j){if(qi<0&&/^(qta|qt|quantita|qty|pezzi)$/.test(x.replace(/\./g,'')))qi=j});
+    if(ni>=0&&qi>=0){h=i;col={n:ni,q:qi,g:low.indexOf('gruppo'),r:low.indexOf('reparto')}}
+  }
+  if(h<0)throw new Error('Nel file non trovo le colonne "Plu" e "Qta". È l’export delle vendite della cassa?');
+  var dal=null,al=null;rows.slice(0,h).forEach(function(r){r.forEach(function(x,j){var k=cnorm(x);if(k==='dal')dal=cdate(r[j+1]);if(k==='al')al=cdate(r[j+1])})});
+  var by={},items=[];
+  rows.slice(h+1).forEach(function(r){
+    var name=String(r[col.n]||'').trim(),q=num(String(r[col.q]||'').replace(/\./g,'').replace(',','.'));if(!name||!(q>0))return;
+    var key=name.toLowerCase();
+    if(!by[key]){by[key]={name:name,group:col.g>=0?String(r[col.g]||'').trim():'',rep:col.r>=0?String(r[col.r]||'').trim():'',qty:0};items.push(by[key])}
+    by[key].qty+=q;
+  });
+  if(!items.length)throw new Error('Nel file non ci sono righe con quantità vendute.');
+  var A=S.salesAliases||{};
+  items.forEach(function(x){
+    var key=x.name.toLowerCase();
+    if(key in A&&(A[key]===''||recipeById(A[key]))){x.rid=A[key];x.st='saved'}
+    else if(cnorm(x.rep)==='vendita a gruppo'){x.rid='';x.st='gen'}
+    else{var sg=csuggest(x.name,x.rep||x.group);x.rid=sg?sg.id:'';x.st=sg?'auto':'none'}
+  });
+  // gruppi della cassa senza nessun piatto riconosciuto (bevande, coperti…): ignorati senza segnalarli
+  var hit={};items.forEach(function(x){if(x.rid)hit[x.group]=1});
+  items.forEach(function(x){if(x.st==='none'&&!hit[x.group])x.st='skip'});
+  var week=dal!=null?wkOfUTC(dal):salesWeekSel(),warn='';
+  if(dal==null)warn='Nel file non trovo le date “Dal / Al”: scegli tu la settimana.';
+  else if(new Date(dal).getUTCDay()!==1||(al!=null&&Math.round((al-dal)/864e5)!==6))warn='Attenzione: il periodo del file non va da lunedì a domenica. Controlla la settimana.';
+  return{file:fname,items:items,week:week,dal:dal,al:al,warn:warn,open:{}};
+}
+function cassaFile(inp){
+  var f=inp.files&&inp.files[0];inp.value='';if(!f)return;
+  f.arrayBuffer().then(function(buf){
+    var txt;try{txt=new TextDecoder('utf-8',{fatal:true}).decode(buf)}catch(e){txt=new TextDecoder('windows-1252').decode(buf)}
+    route.imp=cassaParse(txt.replace(/^﻿/,''),f.name);render();
+  }).catch(function(e){toast(e.message||'File non leggibile.')});
+}
+var IST={saved:'ricordato',auto:'proposto',none:'non trovato',gen:'generico',skip:'ignorato',manual:'scelto'};
+function impSet(i,v){var x=route.imp.items[i];x.rid=v;x.st='manual';impRefresh()}
+function impWeek(){var y=Math.round(num(val('iwy'))),w=Math.round(num(val('iwn')));if(y>=2000&&y<=2100&&w>=1){route.imp.week=wkKey(y,Math.min(w,isoWeeksIn(y)))}impRefresh()}
+function impRefresh(){var sh=document.querySelector('#sheet .sheet'),y=sh?sh.scrollTop:0;document.getElementById('sheet').innerHTML=impSheetHTML();sh=document.querySelector('#sheet .sheet');if(sh)sh.scrollTop=y}
+function impSheetHTML(){
+  var I=route.imp,f=function(n){return n.toLocaleString('it-IT')},G=[],gi={};
+  var opts=groups().map(function(g){return'<optgroup label="'+esc(g.t)+'">'+g.rs.map(function(r){return'<option value="'+r.id+'">'+esc(r.name)+'</option>'}).join('')+'</optgroup>'}).join('');
+  I.items.forEach(function(x,i){var k=x.group||'Altro';if(!(k in gi)){gi[k]=G.length;G.push({t:k,rows:[]})}G[gi[k]].rows.push(i)});
+  var mq=0,mr=0,ig=0,nf=0,rec={};I.items.forEach(function(x){if(x.rid){mq+=x.qty;mr++;rec[x.rid]=1}else{ig++;if(x.st==='none')nf++}});
+  var wk=+I.week.slice(6),dd=function(ms){var d=new Date(ms);return d.getUTCDate()+' '+MBR[d.getUTCMonth()]+' '+d.getUTCFullYear()};
+  var h='<div class="sheet-bg" data-act="closebg"><div class="sheet wide"><h2>Importa vendite dalla cassa</h2>'
+    +'<p class="mut" style="margin:-4px 0 10px">File <b>'+esc(I.file)+'</b>'+(I.dal!=null?' · dal '+dd(I.dal)+(I.al!=null?' al '+dd(I.al):''):'')+'</p>'
+    +'<div class="iwk"><label for="iwn">Settimana</label><input id="iwn" type="number" min="1" max="53" value="'+wk+'" onchange="impWeek()"><input id="iwy" type="number" min="2000" max="2100" value="'+I.week.slice(0,4)+'" onchange="impWeek()" aria-label="Anno"><b>'+wkDates(I.week)+'</b><span class="mut">· conta in '+mLabel(wkMonth(I.week))+'</span></div>'
+    +(I.warn?'<p class="warn" style="margin:0 0 10px;font-size:14px">'+esc(I.warn)+'</p>':'')
+    +'<div class="tot" style="margin:0 0 10px"><div class="r"><span>Righe abbinate a una ricetta</span><b>'+mr+' righe · '+f(mq)+' pezzi su '+Object.keys(rec).length+' piatti</b></div>'
+    +'<div class="r"><span>Righe ignorate (bevande, coperti, voci senza ricetta)</span><b>'+ig+'</b></div>'
+    +(nf?'<div class="mut" style="font-size:13px">'+nf+' piatt'+(nf===1?'o':'i')+' <b class="warn">non trovat'+(nf===1?'o':'i')+'</b>: se hanno una ricetta, sceglila dal menu; altrimenti lasciali su “Ignora”.</div>':'')+'</div>'
+    +'<p class="mut" style="font-size:13px;margin:0 0 12px">Le vendite già presenti per la settimana '+wk+' vengono sostituite. Gli abbinamenti vengono ricordati: dal prossimo file li ritrovi già fatti.'+(S.salesGrain==='W'?'':' Il cliente passerà all’inserimento per settimana.')+'</p>';
+  G.forEach(function(g,k){
+    var m=g.rows.filter(function(i){return I.items[i].rid}).length,q=g.rows.reduce(function(t,i){return t+(I.items[i].rid?I.items[i].qty:0)},0);
+    var open=k in I.open?I.open[k]:(m>0||g.rows.some(function(i){return I.items[i].st==='manual'}));
+    h+='<details class="ig"'+(open?' open':'')+' ontoggle="route.imp.open['+k+']=this.open"><summary>'+esc(g.t)+'<span>'+g.rows.length+(g.rows.length===1?' riga · ':' righe · ')+(m?m+' abbinate, '+f(q)+' pezzi':'tutte ignorate')+'</span></summary>'
+      +g.rows.map(function(i){var x=I.items[i];
+        return'<div class="irow"><span>'+esc(x.name)+(x.rep&&x.rep!==x.group?' <em>'+esc(x.rep)+'</em>':'')+'</span><span class="iq">'+f(x.qty)+'</span>'
+          +'<select aria-label="Ricetta per '+esc(x.name)+'" onchange="impSet('+i+',this.value)"><option value="">— Ignora —</option>'+(x.rid?opts.replace('value="'+x.rid+'"','value="'+x.rid+'" selected'):opts)+'</select>'
+          +'<span class="ist '+x.st+'">'+IST[x.st]+'</span></div>'}).join('')+'</details>';
+  });
+  return h+'<div class="acts"><button class="pri" data-act="impgo"'+(mr?'':' disabled')+'>Importa la settimana '+wk+' ('+f(mq)+' pezzi)</button><button data-act="impclose">Annulla</button></div></div></div>';
 }
 /* ---------- andamento vendite: settimana su settimana, mese su mese, trimestre su trimestre, anno su anno ---------- */
 var MBR=['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
@@ -1376,7 +1488,7 @@ document.addEventListener('click',function(e){
   if(t.dataset.tab){if(typeof flushSales==='function'&&S)flushSales();route.tab=t.dataset.tab;route.recipe=null;route.from=null;route.food=null;route.cat='';route.q='';if(route.tab==='clienti'){ADM&&(ADM.msg='');ADM=null}render();window.scrollTo(0,0);return}
   var a=t.dataset.act,id=t.dataset.id;
   /* clic sullo sfondo scuro di una scheda: chiude solo se non si è cliccato dentro la scheda */
-  if(a==='closebg'){if(e.target!==t)return;if(route.pw){if(!route.pw.forced)route.pw=null}else{route.food=null;route.bulk=null;route.sreset=null}render();return}
+  if(a==='closebg'){if(e.target!==t)return;if(route.pw){if(!route.pw.forced)route.pw=null}else{route.food=null;route.bulk=null;route.sreset=null;route.imp=null}render();return}
   /* accesso e account */
   if(a==='goregister'){route.auth='register';route.authMsg='';renderAuth();return}
   if(a==='gologin'){route.auth='login';route.authMsg='';renderAuth();return}
@@ -1412,6 +1524,13 @@ document.addEventListener('click',function(e){
   else if(a==='smprev'||a==='smnext'){flushSales();var dn=a==='smprev'?-1:1;if(S.salesGrain==='W')route.sw=wkAdd(salesWeekSel(),dn);else route.sm=mAdd(salesMonthSel(),dn);render()}
   else if(a==='sreset'){if(RO)return;flushSales();route.sreset={scope:'one'};render()}
   else if(a==='sresetclose'){route.sreset=null;render()}
+  else if(a==='impopen'){flushSales();var cf=document.getElementById('cassaf');if(cf)cf.click()}
+  else if(a==='impclose'){route.imp=null;render()}
+  else if(a==='impgo'){
+    var I=route.imp;if(!I||!isWk(I.week))return;
+    busy(t,api('POST','/sales/import',{period:I.week,rows:I.items.map(function(x){return{name:x.name,recipeId:x.rid||null,qty:x.qty}})})).then(function(d){
+      route.imp=null;route.sw=I.week;return loadData().then(function(){render();toast('Importati '+num(d.qty).toLocaleString('it-IT')+' pezzi su '+d.recipes+' piatti nella '+wkLabel(I.week).split(' · ')[0]+'.')});
+    }).catch(showErr)}
   else if(a==='sresetgo'){
     if(RO)return;var all=route.sreset.scope==='all',k=curSalesKey();clearTimeout(timers.sales);SPEND={};
     busy(t,api('POST','/sales/reset',all?{scope:'all'}:{period:k})).then(function(d){

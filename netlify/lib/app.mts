@@ -274,6 +274,34 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
     return json({ ok: true, saved: items.length });
   }
 
+  if (path === "/sales/import" && m === "POST") {
+    // importazione di una settimana dall'export della cassa (solo super admin):
+    // rows = [{name, recipeId|null, qty}]; sostituisce le vendite della settimana e ricorda gli abbinamenti
+    if (!s.isSuper) throw forbidden("Solo l'amministratore può importare le vendite dalla cassa.");
+    const per = parsePeriod(b.period);
+    if (!per || per.grain !== "W") throw bad("Settimana non valida.");
+    const rows = (Array.isArray(b.rows) ? b.rows : []).slice(0, 3000).map((x: any) => ({
+      name: str(x?.name, 150).toLowerCase(), recipeId: x?.recipeId ? uuidOrNull(x.recipeId) : null, qty: numOrNull(x?.qty, 0, 1e7) || 0, bad: x?.recipeId && !uuidOrNull(x.recipeId),
+    })).filter((x: any) => x.name);
+    if (rows.some((x: any) => x.bad)) throw bad("Piatto non valido.");
+    const ids = [...new Set(rows.map((x: any) => x.recipeId).filter(Boolean))];
+    if (ids.length) {
+      const ok = await q(`SELECT count(*) AS n FROM recipes WHERE tenant_id=$1 AND id = ANY($2::uuid[])`, [tid, ids]);
+      if (Number(ok[0].n) !== ids.length) throw forbidden("Piatto non accessibile.");
+    }
+    const tot = new Map<string, number>();
+    for (const x of rows) if (x.recipeId && x.qty) tot.set(x.recipeId, (tot.get(x.recipeId) || 0) + x.qty);
+    await tx(async (c) => {
+      await c.query(`DELETE FROM sales WHERE tenant_id=$1 AND grain='W' AND period=$2::date`, [tid, per.date]);
+      for (const [rid, qty] of tot) await putSale(c, tid, rid, per, qty, "cassa");
+      for (const x of rows)
+        await c.query(`INSERT INTO sales_aliases(tenant_id,cash_name,recipe_id) VALUES ($1,$2,$3)
+          ON CONFLICT (tenant_id,cash_name) DO UPDATE SET recipe_id=EXCLUDED.recipe_id`, [tid, x.name, x.recipeId]);
+      await c.query(`UPDATE tenants SET sales_grain='W' WHERE id=$1`, [tid]);
+    });
+    return json({ ok: true, recipes: tot.size, qty: [...tot.values()].reduce((a, v) => a + v, 0) });
+  }
+
   if (path === "/sales/reset" && m === "POST") {
     // azzera le vendite: di un solo periodo oppure tutte (scope "all")
     if (b.scope === "all") {
@@ -489,6 +517,9 @@ async function tenantData(tid: string, s: Scope | null) {
   const sales: Record<string, Record<string, number>> = {};
   for (const x of salesRows) (sales[x.recipe_id] ||= {})[x.m] = Number(x.qty);
 
+  const salesAliases: Record<string, string> = {};
+  if (!s || s.isSuper) for (const a of await q(`SELECT cash_name, recipe_id FROM sales_aliases WHERE tenant_id=$1`, [tid])) salesAliases[a.cash_name] = a.recipe_id || "";
+
   const L: Record<string, string[]> = { reparti: [], fornitori: [], tipologie: [] };
   for (const l of lists) if (L[l.kind]) L[l.kind].push(l.value);
   // l'ordine delle tipologie conta (raggruppamenti): rispetto quello predefinito, poi alfabetico
@@ -514,6 +545,7 @@ async function tenantData(tid: string, s: Scope | null) {
     iva: Number(t.iva), fcTarget: Number(t.fc_target), salesGrain: t.sales_grain === "W" ? "W" : "M",
     recipeCount: recipes.length,
     sales,
+    ...(s && !s.isSuper ? {} : { salesAliases }),
     lists: { ...L, tipiAttivita: await globalTipi() },
     foods: foods.map((f) => ({
       id: f.id, name: f.name, category: f.category, supplier: f.supplier, unit: f.unit, mode: f.price_mode,
@@ -565,6 +597,11 @@ async function importInto(c: Queryable, tid: string, d: any) {
     }));
     await saveRecipe(c, tid, nid, { ...r, rows });
   }
+  if (d.salesAliases && typeof d.salesAliases === "object")
+    for (const [k, v] of Object.entries(d.salesAliases).slice(0, 3000)) {
+      const name = str(k, 150).toLowerCase(), rid = v ? rmap.get(String(v)) : null;
+      if (name && (rid || !v)) await c.query(`INSERT INTO sales_aliases(tenant_id,cash_name,recipe_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [tid, name, rid || null]);
+    }
   if (d.salesGrain === "W" || d.salesGrain === "M") await c.query(`UPDATE tenants SET sales_grain=$2 WHERE id=$1`, [tid, d.salesGrain]);
   // vendite: formato nuovo {idRicetta: {"AAAA-MM" o "AAAA-Wnn": qty}}; altrimenti il vecchio campo "sold" nel mese soldPeriod (o il mese corrente)
   const fallback = /^\d{4}-\d{2}$/.test(String(d.soldPeriod || "")) ? d.soldPeriod : new Date().toISOString().slice(0, 7);

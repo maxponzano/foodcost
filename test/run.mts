@@ -342,6 +342,19 @@ section("Vendite settimanali e azzeramento");
   ok(r.data.deleted === 2 && s1[r1]["2026-W40"] === undefined && s1[r1]["2026-W41"] === 25 && s1[r1]["2026-09"] === 55, "azzera solo la settimana scelta");
   r = await A.post("/sales/reset", { scope: "all" });
   ok(r.status === 200 && Object.keys((await A.get("/data")).data.sales).length === 0, "azzera tutte le vendite del cliente");
+  // importazione dalla cassa
+  const imp = { period: "2026-W01", rows: [{ name: "Classico 200 gr", recipeId: r1, qty: 21 }, { name: "Classico 100 gr", recipeId: r1, qty: 23 }, { name: "Coca Cola", recipeId: null, qty: 18 }, { name: "Pulled", recipeId: r2, qty: 0 }] };
+  ok((await A.post("/sales/import", imp)).status === 403, "il cliente non può importare dalla cassa");
+  ok((await max.post("/sales/import", { ...imp, period: "2026-01" }, { tenant: tA.id })).status === 400, "importazione solo per settimana");
+  ok((await max.post("/sales/import", { ...imp, rows: [{ name: "x", recipeId: rB, qty: 1 }] }, { tenant: tA.id })).status === 403, "non si importa su un piatto di un altro cliente");
+  await A.put("/sales", { period: "2026-W01", items: [{ recipeId: r2, qty: 99 }] });
+  r = await max.post("/sales/import", imp, { tenant: tA.id });
+  let dd = (await max.get("/data", { tenant: tA.id })).data;
+  ok(r.status === 200 && dd.sales[r1]["2026-W01"] === 44, "le righe abbinate allo stesso piatto si sommano (21 + 23)");
+  ok(!dd.sales[r2] || dd.sales[r2]["2026-W01"] === undefined, "l'importazione sostituisce la settimana");
+  ok(dd.salesAliases["classico 100 gr"] === r1 && dd.salesAliases["coca cola"] === "", "abbinamenti e righe ignorate ricordati");
+  ok((await A.get("/data")).data.salesAliases === undefined, "il cliente non riceve gli abbinamenti della cassa");
+  await max.post("/sales/reset", { scope: "all" }, { tenant: tA.id });
   await A.put("/sales", { period: "2026-W40", items: [{ recipeId: r1, qty: 7 }] });
   await A.put("/sales", { period: "2026-09", items: [{ recipeId: r1, qty: 55 }] });
 }
