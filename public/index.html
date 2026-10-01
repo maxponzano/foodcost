@@ -133,6 +133,8 @@ details.tc summary::-webkit-details-marker{display:none}
 .qleg i{width:10px;height:10px;border-radius:50%;display:inline-block}
 .qnote{font-size:12px;color:var(--mut);padding:6px 0 10px}
 .thead{display:none}
+.gh .cnt{font-size:12px;color:var(--mut);font-weight:600;letter-spacing:0;margin-left:4px}
+.rgh:first-child{margin-top:4px}
 .rlink{cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
 .rlink:hover{color:var(--acc);text-decoration-color:var(--acc)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .gh{color:var(--brand-soft)}}
@@ -147,6 +149,8 @@ details.tc summary::-webkit-details-marker{display:none}
   nav button.on{box-shadow:inset 0 -3px 0 var(--acc)}
   #flist,#rlist{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
   #flist .card,#rlist .card{margin:0}
+  #rlist .gh{grid-column:1/-1;margin:14px 0 0}
+  #rlist .gh:first-child{margin-top:0}
   .sheet-bg{align-items:center}
   .sheet{border-radius:18px;max-width:680px;max-height:88%}
   .auth{margin-top:48px}
@@ -454,9 +458,16 @@ function recipesList(){
   var list=S.recipes.filter(function(r){return(!q||r.name.toLowerCase().indexOf(q)>=0)&&(!route.cat||r.type===route.cat)}).sort(function(a,b){return a.name.localeCompare(b.name,'it')});
   if(!S.recipes.length)return'<div class="empty">Nessuna ricetta.'+(RO?'':'<br>Prima inserisci qualche alimento, poi tocca “+ Ricetta”.')+'</div>';
   if(!list.length)return'<div class="empty">Nessun risultato.</div>';
-  return list.map(function(r){var t=recipeTotal(r),d=num(r.portions)||1;
-    return'<div class="card item" data-act="editrecipe" data-id="'+r.id+'"><div><b>'+esc(r.name)+'</b><span class="badge">'+esc(r.type||'Senza tipologia')+'</span> <span class="mut">'+r.rows.length+' ingr.</span></div>'
-    +'<div class="right"><b>'+eur(t.total/d)+'</b><span class="mut">per dose'+(t.miss?' <span class="warn">· '+t.miss+' senza prezzo</span>':'')+'</span></div></div>'}).join('');
+  // divise per tipologia, nell'ordine dell'elenco tipologie (come in Marginalità); in fondo quelle senza tipologia
+  var order=S.lists.tipologie,keys=[];
+  list.forEach(function(r){var k=order.indexOf(r.type)>=0?r.type:'';if(keys.indexOf(k)<0)keys.push(k)});
+  keys.sort(function(a,b){return a===''?1:b===''?-1:order.indexOf(a)-order.indexOf(b)});
+  return keys.map(function(k){
+    var rs=list.filter(function(r){return(order.indexOf(r.type)>=0?r.type:'')===k});
+    return'<h2 class="gh rgh">'+esc(k||'Senza tipologia')+' <span class="cnt">'+rs.length+'</span></h2>'+rs.map(function(r){var t=recipeTotal(r),d=num(r.portions)||1;
+      return'<div class="card item" data-act="editrecipe" data-id="'+r.id+'"><div><b>'+esc(r.name)+'</b><span class="mut">'+r.rows.length+' ingr.'+(num(r.price)>0?' · prezzo '+eur(num(r.price)):'')+'</span></div>'
+      +'<div class="right"><b>'+eur(t.total/d)+'</b><span class="mut">per dose'+(t.miss?' <span class="warn">· '+t.miss+' senza prezzo</span>':'')+'</span></div></div>'}).join('');
+  }).join('');
 }
 function recipeEditorHTML(){
   var r=route.recipe;
