@@ -248,10 +248,18 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
     return json({ ok: true });
   }
 
+  if (path === "/tenant" && m === "PATCH") {
+    // modo di inserimento delle vendite: mensile (M) o settimanale (W)
+    const g = String(b.salesGrain || "");
+    if (!["M", "W"].includes(g)) throw bad("Modo di inserimento non valido.");
+    await q(`UPDATE tenants SET sales_grain=$2 WHERE id=$1`, [tid, g]);
+    return json({ ok: true });
+  }
+
   if (path === "/sales" && m === "PUT") {
-    // vendite di un mese: [{recipeId, qty}]; qty vuoto o 0 = cancella
-    const period = String(b.period || "");
-    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) throw bad("Mese non valido.");
+    // vendite di un mese ("AAAA-MM") o di una settimana ISO ("AAAA-Wnn"): [{recipeId, qty}]; qty vuoto o 0 = cancella
+    const per = parsePeriod(b.period);
+    if (!per) throw bad("Periodo non valido.");
     const items = (Array.isArray(b.items) ? b.items : []).slice(0, 2000);
     const ids = [...new Set(items.map((x: any) => uuidOrNull(x?.recipeId)).filter(Boolean))];
     if (items.some((x: any) => !uuidOrNull(x?.recipeId))) throw bad("Piatto non valido.");
@@ -260,15 +268,21 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
       if (Number(ok[0].n) !== ids.length) throw forbidden("Piatto non accessibile.");
     }
     await tx(async (c) => {
-      for (const it of items) {
-        const qty = numOrNull(it.qty, 0, 1e7);
-        if (!qty) await c.query(`DELETE FROM sales WHERE recipe_id=$1 AND period=$2::date AND tenant_id=$3`, [it.recipeId, period + "-01", tid]);
-        else await c.query(
-          `INSERT INTO sales(tenant_id,recipe_id,period,qty,source) VALUES ($1,$2,$3::date,$4,'manuale')
-           ON CONFLICT (recipe_id,period) DO UPDATE SET qty=EXCLUDED.qty, source='manuale'`, [tid, it.recipeId, period + "-01", qty]);
-      }
+      for (const it of items) await putSale(c, tid, it.recipeId, per, numOrNull(it.qty, 0, 1e7));
     });
     return json({ ok: true, saved: items.length });
+  }
+
+  if (path === "/sales/reset" && m === "POST") {
+    // azzera le vendite: di un solo periodo oppure tutte (scope "all")
+    if (b.scope === "all") {
+      const r = await q(`DELETE FROM sales WHERE tenant_id=$1 RETURNING 1`, [tid]);
+      return json({ ok: true, deleted: r.length });
+    }
+    const per = parsePeriod(b.period);
+    if (!per) throw bad("Periodo non valido.");
+    const r = await q(`DELETE FROM sales WHERE tenant_id=$1 AND grain=$2 AND period=$3::date RETURNING 1`, [tid, per.grain, per.date]);
+    return json({ ok: true, deleted: r.length });
   }
 
   if (path === "/lists" && (m === "POST" || m === "DELETE")) {
@@ -423,6 +437,40 @@ async function checkCycle(c: Queryable, tid: string, rid: string, subIds: string
 }
 
 /* =====================================================================
+   Periodi delle vendite: mese "AAAA-MM" oppure settimana ISO "AAAA-Wnn"
+   (lunedì-domenica; la settimana 1 è quella con il primo giovedì dell'anno)
+   ===================================================================== */
+const DAY = 86400000;
+export function isoWeeks(y: number) {
+  const p = (x: number) => (x + Math.floor(x / 4) - Math.floor(x / 100) + Math.floor(x / 400)) % 7;
+  return p(y) === 4 || p(y - 1) === 3 ? 53 : 52;
+}
+export function isoMonday(y: number, w: number) {
+  const jan4 = Date.UTC(y, 0, 4);
+  const dow = (new Date(jan4).getUTCDay() + 6) % 7;
+  return new Date(jan4 - dow * DAY + (w - 1) * 7 * DAY).toISOString().slice(0, 10);
+}
+type Period = { grain: "M" | "W"; date: string };
+export function parsePeriod(v: unknown): Period | null {
+  const s = String(v ?? "");
+  let x = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(s);
+  if (x) return { grain: "M", date: s + "-01" };
+  x = /^(\d{4})-W(\d{2})$/.exec(s);
+  if (x) {
+    const y = +x[1], w = +x[2];
+    if (y < 2000 || y > 2100 || w < 1 || w > isoWeeks(y)) return null;
+    return { grain: "W", date: isoMonday(y, w) };
+  }
+  return null;
+}
+async function putSale(c: Queryable, tid: string, rid: string, per: Period, qty: number | null, source = "manuale") {
+  if (!qty) await c.query(`DELETE FROM sales WHERE recipe_id=$1 AND grain=$2 AND period=$3::date AND tenant_id=$4`, [rid, per.grain, per.date, tid]);
+  else await c.query(
+    `INSERT INTO sales(tenant_id,recipe_id,grain,period,qty,source) VALUES ($1,$2,$3,$4::date,$5,$6)
+     ON CONFLICT (recipe_id,grain,period) DO UPDATE SET qty=EXCLUDED.qty, source=EXCLUDED.source`, [tid, rid, per.grain, per.date, qty, source]);
+}
+
+/* =====================================================================
    Lettura completa dei dati di un cliente (formato usato dall'app)
    ===================================================================== */
 async function tenantData(tid: string, s: Scope | null) {
@@ -435,7 +483,8 @@ async function tenantData(tid: string, s: Scope | null) {
   const recipes = await q(`SELECT * FROM recipes WHERE tenant_id=$1 ORDER BY lower(name)`, [tid]);
   const rows = await q(
     `SELECT rr.* FROM recipe_rows rr JOIN recipes r ON r.id=rr.recipe_id WHERE r.tenant_id=$1 ORDER BY rr.recipe_id, rr.position`, [tid]);
-  const salesRows = await q(`SELECT recipe_id, to_char(period,'YYYY-MM') AS m, qty FROM sales WHERE tenant_id=$1`, [tid]);
+  const salesRows = await q(
+    `SELECT recipe_id, CASE WHEN grain='W' THEN to_char(period,'IYYY-"W"IW') ELSE to_char(period,'YYYY-MM') END AS m, qty FROM sales WHERE tenant_id=$1`, [tid]);
   const sales: Record<string, Record<string, number>> = {};
   for (const x of salesRows) (sales[x.recipe_id] ||= {})[x.m] = Number(x.qty);
 
@@ -461,7 +510,7 @@ async function tenantData(tid: string, s: Scope | null) {
     },
     canWrite: s ? s.canWrite : true,
     isSuper: s ? s.isSuper : true,
-    iva: Number(t.iva), fcTarget: Number(t.fc_target),
+    iva: Number(t.iva), fcTarget: Number(t.fc_target), salesGrain: t.sales_grain === "W" ? "W" : "M",
     recipeCount: recipes.length,
     sales,
     lists: { ...L, tipiAttivita: await globalTipi() },
@@ -515,16 +564,16 @@ async function importInto(c: Queryable, tid: string, d: any) {
     }));
     await saveRecipe(c, tid, nid, { ...r, rows });
   }
-  // vendite: formato nuovo {idRicetta: {"AAAA-MM": qty}}; altrimenti il vecchio campo "sold" nel mese soldPeriod (o il mese corrente)
+  if (d.salesGrain === "W" || d.salesGrain === "M") await c.query(`UPDATE tenants SET sales_grain=$2 WHERE id=$1`, [tid, d.salesGrain]);
+  // vendite: formato nuovo {idRicetta: {"AAAA-MM" o "AAAA-Wnn": qty}}; altrimenti il vecchio campo "sold" nel mese soldPeriod (o il mese corrente)
   const fallback = /^\d{4}-\d{2}$/.test(String(d.soldPeriod || "")) ? d.soldPeriod : new Date().toISOString().slice(0, 7);
   for (const r of d.recipes) {
     const nid = rmap.get(String(r?.id));
     if (!nid) continue;
     const per: Record<string, unknown> = (d.sales && typeof d.sales === "object" && d.sales[String(r.id)]) || (numOrNull(r.sold, 0, 1e9) ? { [fallback]: r.sold } : {});
     for (const [mm, v] of Object.entries(per)) {
-      const qty = numOrNull(v, 0, 1e7);
-      if (qty && /^\d{4}-(0[1-9]|1[0-2])$/.test(mm))
-        await c.query(`INSERT INTO sales(tenant_id,recipe_id,period,qty) VALUES ($1,$2,$3::date,$4) ON CONFLICT (recipe_id,period) DO UPDATE SET qty=EXCLUDED.qty`, [tid, nid, mm + "-01", qty]);
+      const qty = numOrNull(v, 0, 1e7), per = parsePeriod(mm);
+      if (qty && per) await putSale(c, tid, nid, per, qty, "import");
     }
   }
 }

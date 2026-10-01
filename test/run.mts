@@ -312,6 +312,37 @@ section("Vendite mensili");
   ok((await V.get("/data")).data.sales[r1]["2026-09"] === 55, "il viewer legge le vendite");
 }
 
+section("Vendite settimanali e azzeramento");
+{
+  const { isoMonday, isoWeeks, parsePeriod } = await import("../netlify/lib/app.mts");
+  ok(isoMonday(2026, 1) === "2025-12-29" && isoMonday(2026, 40) === "2026-09-28" && isoMonday(2021, 1) === "2021-01-04", "lunedì della settimana ISO corretto");
+  ok(isoWeeks(2026) === 53 && isoWeeks(2025) === 52 && isoWeeks(2020) === 53, "anni con 52 o 53 settimane");
+  ok(parsePeriod("2025-W53") === null && parsePeriod("2026-W53")?.date === "2026-12-28" && parsePeriod("2026-W00") === null, "settimana inesistente rifiutata");
+  const dA = (await A.get("/data")).data, r1 = dA.recipes[0].id, r2 = dA.recipes[1].id;
+  ok(dA.salesGrain === "M", "di base il cliente inserisce le vendite per mese");
+  ok((await V.patch("/tenant", { salesGrain: "W" })).status === 403, "il viewer non può cambiare il modo di inserimento");
+  ok((await A.patch("/tenant", { salesGrain: "X" })).status === 400, "modo non valido → 400");
+  ok((await A.patch("/tenant", { salesGrain: "W" })).status === 200 && (await A.get("/data")).data.salesGrain === "W", "A passa all'inserimento settimanale");
+  ok((await B.get("/data")).data.salesGrain === "M", "il modo di B non cambia");
+  r = await A.put("/sales", { period: "2026-W40", items: [{ recipeId: r1, qty: 30 }, { recipeId: r2, qty: 4 }] });
+  ok(r.status === 200, "A inserisce le vendite della settimana 40");
+  await A.put("/sales", { period: "2026-W41", items: [{ recipeId: r1, qty: 25 }] });
+  let s1 = (await A.get("/data")).data.sales;
+  ok(s1[r1]["2026-W40"] === 30 && s1[r1]["2026-W41"] === 25 && s1[r1]["2026-09"] === 55, "settimane salvate accanto ai mesi già inseriti");
+  ok((await A.put("/sales", { period: "2025-W53", items: [] })).status === 400, "settimana 53 del 2025 non esiste → 400");
+  ok((await A.put("/sales", { period: "2026-W40", items: [{ recipeId: rB, qty: 5 }] })).status === 403, "A non può scrivere vendite settimanali di un piatto di B");
+  ok((await V.post("/sales/reset", { scope: "all" })).status === 403, "il viewer non può azzerare le vendite");
+  ok((await B.post("/sales/reset", { scope: "all" })).status === 200 && (await A.get("/data")).data.sales[r1]["2026-W40"] === 30, "l'azzeramento di B non tocca le vendite di A");
+  ok((await A.post("/sales/reset", { period: "2026-13" })).status === 400, "azzeramento di un periodo non valido → 400");
+  r = await A.post("/sales/reset", { period: "2026-W40" });
+  s1 = (await A.get("/data")).data.sales;
+  ok(r.data.deleted === 2 && s1[r1]["2026-W40"] === undefined && s1[r1]["2026-W41"] === 25 && s1[r1]["2026-09"] === 55, "azzera solo la settimana scelta");
+  r = await A.post("/sales/reset", { scope: "all" });
+  ok(r.status === 200 && Object.keys((await A.get("/data")).data.sales).length === 0, "azzera tutte le vendite del cliente");
+  await A.put("/sales", { period: "2026-W40", items: [{ recipeId: r1, qty: 7 }] });
+  await A.put("/sales", { period: "2026-09", items: [{ recipeId: r1, qty: 55 }] });
+}
+
 section("Dati di test, importazione, varie");
 r = await max.post("/admin/tenants", { ragione: "Demo", tipo: "Pizzeria", demo: true });
 const demo = r.data.id;
@@ -327,6 +358,12 @@ const bd = (await max.get("/data", { tenant: tB.id })).data;
 ok(bd.recipes.length === 8 && bd.recipes.find((x: any) => x.name === "MARGHERITA").rows[0].subId === bd.recipes.find((x: any) => x.name === "PALLINA").id,
   "import di un export in un altro cliente, con id ricollegati");
 ok(bd.sales[bd.recipes.find((x: any) => x.name === "MARGHERITA").id] && Object.values(bd.sales[bd.recipes.find((x: any) => x.name === "MARGHERITA").id])[0] === 220, "l'import porta anche le vendite");
+{
+  const ea = (await max.get("/admin/export?tenant=" + tA.id)).data;
+  await max.post("/admin/import", { tenant: tB.id, data: ea });
+  const b2 = (await max.get("/data", { tenant: tB.id })).data, s2 = Object.values(b2.sales) as any[];
+  ok(b2.salesGrain === "W" && s2.some((x) => x["2026-W40"] === 7 && x["2026-09"] === 55), "export/import porta settimane, mesi e modo di inserimento");
+}
 r = await A.post("/lists", { kind: "reparti", value: "X" }, { headers: { origin: "https://evil.example" } });
 ok(r.status === 403, "richiesta da un altro sito (Origin diverso) rifiutata");
 r = await A.call("POST", "/lists", "kind=reparti", { headers: { "content-type": "text/plain" } });
