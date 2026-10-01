@@ -128,7 +128,7 @@ details.tc summary::-webkit-details-marker{display:none}
 .qchart text{fill:var(--mut);font-size:11px}
 .qchart .tk{font-size:11px;font-feature-settings:"tnum" 1}
 .qchart .at{font-size:11px;font-weight:500}
-.qchart .avt{font-size:11px;font-weight:600;fill:var(--ink)}
+.qchart .avt{font-size:11px;font-weight:600;fill:var(--ink);stroke:var(--card);stroke-width:3px;stroke-linejoin:round;paint-order:stroke}
 .qchart .ql{font-size:10.5px;font-weight:700;letter-spacing:.06em}
 .qchart .dot{stroke:var(--card);stroke-width:2}
 .qchart .qhit{fill:transparent;cursor:pointer}
@@ -705,7 +705,7 @@ function drawQuadrant(gi,it,aJ,aG,aK){
   h+='<line class="ax" x1="'+L+'" y1="'+(T+ph)+'" x2="'+(L+pw)+'" y2="'+(T+ph)+'"/>';
   // medie
   h+='<line class="avgl" x1="'+ax+'" y1="'+T+'" x2="'+ax+'" y2="'+(T+ph)+'"/><line class="avgl" x1="'+L+'" y1="'+ay+'" x2="'+(L+pw)+'" y2="'+ay+'"/>'
-    +'<text class="avt" x="'+ax+'" y="'+(T-8)+'" text-anchor="middle">media '+eur(aG)+'</text>'
+    +'<text class="avt" x="'+(ax>L+pw*0.7?ax-6:ax+6)+'" y="'+(T+36)+'" text-anchor="'+(ax>L+pw*0.7?'end':'start')+'">media '+eur(aG)+'</text>'
     +'<text class="avt" x="'+(L+pw)+'" y="'+(ay-6)+'" text-anchor="end">media '+Math.round(aJ)+'</text>';
   // nomi dei quadranti, piccoli negli angoli
   var q=function(x,y,anc,c,t){return'<text class="ql" x="'+x+'" y="'+y+'" text-anchor="'+anc+'" style="fill:var('+c+')">'+t+'</text>'};
