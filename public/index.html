@@ -144,7 +144,7 @@ details.tc summary::-webkit-details-marker{display:none}
 .hb-t{position:relative;height:12px}
 .hb-b{height:12px;border-radius:0 4px 4px 0;min-width:2px}
 .hb-b.dim{opacity:.35}
-.hb-v{font-weight:600;min-width:62px;text-align:right;color:var(--ink)}
+.hb-v{font-weight:600;min-width:62px;white-space:nowrap;text-align:right;color:var(--ink)}
 .hb-tgt{position:absolute;top:-4px;bottom:-4px;border-left:2px dashed var(--mut);z-index:1}
 .hb-row:first-child .hb-tgt span{position:absolute;top:-17px;left:-30px;font-size:10px;color:var(--mut);white-space:nowrap}
 .hb-row:not(:first-child) .hb-tgt span{display:none}
@@ -824,14 +824,15 @@ function drawPareto(){
     +(D.length>show.length?'<p class="mut cnote">Mostrati i primi '+show.length+' piatti.</p>':'');
 }
 
-/* ---------- 3. FOOD COST % PER PIATTO (Marginalità) ---------- */
+/* ---------- 3. MARGINE PER PIATTO (Marginalità) ---------- */
 function drawFc(gi,g){
   var el=document.getElementById('fc-'+gi);if(!el)return;
-  var L=g.rs.map(function(r){return{r:r,c:calcR(r)}}).filter(function(x){return x.c.fcPct!=null&&x.c.ok});
+  var L=g.rs.map(function(r){return{r:r,c:calcR(r)}}).filter(function(x){return x.c.mg!=null&&x.c.ok});
   if(!L.length){el.innerHTML='';return}
-  var t=S.fcTarget,max=Math.max(t*1.6,Math.min(100,Math.max.apply(null,L.map(function(x){return x.c.fcPct*100}))*1.05));
-  el.innerHTML=hbars(L.map(function(x){return{label:x.r.name,value:x.c.fcPct*100,text:fmtPct(x.c.fcPct),color:'var(--'+(fcClass(x.c.fcPct)||'ok')+')',act:'openrecipe',id:x.r.id,
-    tip:x.r.name+'\nFood cost '+fmtPct(x.c.fcPct)+' ('+eur(x.c.dose)+' su '+eur(x.c.net)+')\nMargine '+eur(x.c.mg)}}),{max:max,target:t,targetLabel:'obiettivo '+t+'%'});
+  var avg=L.reduce(function(s,x){return s+x.c.mg},0)/L.length,max=Math.max(avg,Math.max.apply(null,L.map(function(x){return x.c.mg})))*1.05||1;
+  el.innerHTML=hbars(L.map(function(x){return{label:x.r.name,value:Math.max(0,x.c.mg),text:eur(x.c.mg)+' · '+fmtPct(x.c.mgPct),color:x.c.mg<0?'var(--bad)':null,act:'openrecipe',id:x.r.id,
+    tip:x.r.name+'\nMargine '+eur(x.c.mg)+' ('+fmtPct(x.c.mgPct)+')\nPrezzo IVA escl. '+eur(x.c.net)+' · food cost '+eur(x.c.dose)}}),{max:max,target:avg,targetLabel:'media '+eur(avg)})
+    +'<p class="mut cnote">Margine a piatto IVA esclusa · linea tratteggiata = media della categoria.</p>';
 }
 
 /* ---------- 4. COMPOSIZIONE DEL COSTO (ricetta) ---------- */
