@@ -1,7 +1,7 @@
 /* Test di sicurezza e permessi contro un Postgres vero.
    Uso: TEST_DATABASE_URL=postgres://... npm test   (il database viene svuotato!) */
 import pg from "pg";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { setPool } from "../netlify/lib/db.mts";
 import { handle } from "../netlify/lib/app.mts";
 
@@ -13,7 +13,8 @@ process.env.SUPERADMIN_PASSWORD = "password-max-123";
 
 const pool = new pg.Pool({ connectionString: DB });
 await pool.query("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
-await pool.query(readFileSync(new URL("../netlify/database/migrations/001_schema/migration.sql", import.meta.url), "utf8"));
+for (const d of readdirSync(new URL("../netlify/database/migrations/", import.meta.url)).sort())
+    await pool.query(readFileSync(new URL(`../netlify/database/migrations/${d}/migration.sql`, import.meta.url), "utf8"));
 setPool(pool as any);
 
 let pass = 0, fail = 0;
@@ -278,6 +279,19 @@ section("Cambio massivo del prezzo da usare");
   ok(dB.foods.find((x: any) => x.id === fB).mode === "max", "l'alimento di B non è cambiato");
   ok((await A.patch("/foods", { mode: "boh", ids: [fA] })).status === 400, "prezzo da usare non valido → 400");
   ok((await V.patch("/foods", { mode: "avg", ids: [fA] })).status === 403, "il viewer non può fare il cambio massivo");
+}
+
+section("Piatto escluso dalle medie");
+{
+  const rid = (await A.get("/data")).data.recipes[0].id;
+  ok((await A.get("/data")).data.recipes[0].inAvg === true, "di base il piatto conta nella media");
+  r = await A.patch("/recipes/" + rid, { inAvg: false });
+  ok(r.status === 200 && (await A.get("/data")).data.recipes.find((x: any) => x.id === rid).inAvg === false, "A esclude un piatto dalla media");
+  const full = (await A.get("/data")).data.recipes.find((x: any) => x.id === rid);
+  await A.put("/recipes/" + rid, { ...full });
+  ok((await A.get("/data")).data.recipes.find((x: any) => x.id === rid).inAvg === false, "salvando la ricetta l'esclusione resta");
+  ok((await V.patch("/recipes/" + rid, { inAvg: true })).status === 403, "il viewer non può cambiare il flag");
+  ok((await B.patch("/recipes/" + rid, { inAvg: true })).status === 404, "B non può cambiare il flag di un piatto di A");
 }
 
 section("Dati di test, importazione, varie");

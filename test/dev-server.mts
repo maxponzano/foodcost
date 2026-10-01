@@ -3,14 +3,15 @@
 import http from "node:http";
 import pg from "pg";
 import { readFile } from "node:fs/promises";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { setPool } from "../netlify/lib/db.mts";
 import { handle } from "../netlify/lib/app.mts";
 
 const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
 if (process.env.RESET_DB) {
   await pool.query("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
-  await pool.query(readFileSync(new URL("../netlify/database/migrations/001_schema/migration.sql", import.meta.url), "utf8"));
+  for (const d of readdirSync(new URL("../netlify/database/migrations/", import.meta.url)).sort())
+    await pool.query(readFileSync(new URL(`../netlify/database/migrations/${d}/migration.sql`, import.meta.url), "utf8"));
 }
 setPool(pool as any);
 const port = Number(process.env.PORT || 8888);

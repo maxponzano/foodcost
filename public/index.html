@@ -134,6 +134,9 @@ details.tc summary::-webkit-details-marker{display:none}
 .qleg i{width:10px;height:10px;border-radius:50%;display:inline-block}
 .qnote{font-size:12px;color:var(--mut);padding:6px 0 10px}
 .thead{display:none}
+.avgchk{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--mut);margin:3px 0 0;cursor:pointer}
+.avgchk input{width:auto;min-height:0;margin:0}
+.mrow.noavg .mname b,.mrow.noavg .kv b{opacity:.5}
 /* grafici */
 .ch{font-family:var(--f-head);font-size:14px;font-weight:700;margin:0 0 10px;color:var(--ink)}
 .cnote{font-size:12px;margin:8px 0 0}
@@ -607,13 +610,15 @@ function calcR(r){
 function pct(x){return x==null?'—':(x*100).toFixed(1).replace('.',',')+' %'}
 function fcClass(x){if(x==null)return'';var t=S.fcTarget/100;return x<=t?'ok':(x<=t+0.05?'warn':'bad')}
 function setT(id,t){var e=document.getElementById(id);if(e)e.textContent=t}
+function setInAvg(id,v){var r=recipeById(id);r.inAvg=v;var row=document.getElementById('mr-'+id);if(row)row.classList.toggle('noavg',!v);paintMarg();api('PATCH','/recipes/'+id,{inAvg:v}).catch(showErr)}
 function setPrice(id,v){var r=recipeById(id);r.price=v;paintMarg();later('pr'+id,function(){api('PATCH','/recipes/'+id,{price:v}).catch(showErr)})}
 function margHTML(){
   if(!S.recipes.length)return'<div class="empty">Nessuna ricetta.<br>Creale nella sezione Ricette.</div>';
   return simHTML()+'<p class="mut" style="margin:0 0 6px">Inserisci il prezzo di vendita IVA inclusa: food cost e margini si calcolano da soli. Il food cost è verde fino al '+S.fcTarget+'%, arancione fino a +5 punti, poi rosso.</p>'
   +groups().map(function(g,gi){
     return'<h2 class="gh">'+esc(g.t)+'</h2><div class="card mt m6"><div class="fcchart" id="fc-'+gi+'"></div><div class="thead"><span>Piatto</span><div><span>Prezzo IVA incl.</span><span>IVA escl.</span><span>Food cost dose</span><span>Food cost %</span><span>Margine €</span><span>Margine %</span></div></div>'+g.rs.map(function(r){
-      return'<div class="mrow"><div class="mname"><div class="mh"><b class="rlink" data-act="openrecipe" data-id="'+r.id+'" title="Apri la ricetta">'+esc(r.name)+'</b><span class="mut warn" id="mw-'+r.id+'"></span></div></div>'
+      return'<div class="mrow'+(r.inAvg===false?' noavg':'')+'" id="mr-'+r.id+'"><div class="mname"><div class="mh"><b class="rlink" data-act="openrecipe" data-id="'+r.id+'" title="Apri la ricetta">'+esc(r.name)+'</b><span class="mut warn" id="mw-'+r.id+'"></span></div>'
+        +'<label class="avgchk" title="Se togli la spunta, il piatto resta in elenco ma non entra nelle medie della categoria"><input type="checkbox"'+(r.inAvg===false?'':' checked')+' onchange="setInAvg(\''+r.id+'\',this.checked)"> conta nella media</label></div>'
       +'<div class="kgrid"><label><span class="kl">Prezzo IVA incl. €</span><input type="number" inputmode="decimal" step="0.01" value="'+esc(r.price||'')+'" oninput="setPrice(\''+r.id+'\',this.value)"></label>'
       +'<div class="kv"><span class="kl">Prezzo IVA escl.</span><b id="mn-'+r.id+'"></b></div><div class="kv"><span class="kl">Food cost dose</span><b id="mf-'+r.id+'"></b></div>'
       +'<div class="kv"><span class="kl">Food cost %</span><b id="mp-'+r.id+'"></b></div><div class="kv"><span class="kl">Margine €</span><b id="mg-'+r.id+'"></b></div><div class="kv"><span class="kl">Margine %</span><b id="mq-'+r.id+'"></b></div></div></div>';
@@ -628,12 +633,13 @@ function paintMarg(){
     g.rs.forEach(function(r){
       var c=calcR(r);
       setT('mn-'+r.id,c.net>0?eur(c.net):'—');setT('mf-'+r.id,c.ok?eur(c.dose):'—');
-      var e=document.getElementById('mp-'+r.id);if(e){e.textContent=pct(c.fcPct);e.className=fcClass(c.fcPct)}
-      setT('mg-'+r.id,c.mg==null?'—':eur(c.mg));setT('mq-'+r.id,pct(c.mgPct));
+      var e=document.getElementById('mp-'+r.id);if(e){e.textContent=c.ok?pct(c.fcPct):'—';e.className=c.ok?fcClass(c.fcPct):''}
+      setT('mg-'+r.id,c.mg==null||!c.ok?'—':eur(c.mg));setT('mq-'+r.id,c.ok?pct(c.mgPct):'—');
       setT('mw-'+r.id,c.miss?'⚠ '+c.miss+' ingr. senza prezzo':'');
-      if(c.net>0&&c.ok){sd+=c.dose;sn+=c.net;smg+=c.mg;n++}
+      if(c.net>0&&c.ok&&r.inAvg!==false){sd+=c.dose;sn+=c.net;smg+=c.mg;n++}
     });
-    setT('ma-'+gi,n?'Media categoria · Food cost '+pct(sd/sn)+' · Margine '+eur(smg/n)+' · Prezzo medio IVA escl. '+eur(sn/n):'Media categoria: inserisci i prezzi di vendita');
+    var ex=g.rs.filter(function(r){return r.inAvg===false}).length;
+    setT('ma-'+gi,(n?'Media categoria · Food cost '+pct(sd/sn)+' · Margine '+eur(smg/n)+' · Prezzo medio IVA escl. '+eur(sn/n):'Media categoria: inserisci i prezzi di vendita')+(ex?' · '+ex+' piatt'+(ex===1?'o escluso':'i esclusi')+' dalla media':''));
   });
 }
 
@@ -714,7 +720,7 @@ function qTip(e){
 document.addEventListener('mouseover',qTip);document.addEventListener('click',qTip);
 function avgOf(a){return a.length?a.reduce(function(s,v){return s+v},0)/a.length:0}
 function paintMenu(){
-  drawPareto();
+  drawPareto();drawTopSold();
   groups().forEach(function(g,gi){
     var it=g.rs.map(function(r){var c=calcR(r);return{r:r,c:c,sold:num(r.sold),tm:num(r.time),net:c.net,fc:c.dose,mg:c.net>0?c.net-c.dose:0}});
     var ok=it.filter(function(x){return x.net>0&&x.c.ok});
@@ -826,14 +832,16 @@ function drawTopSold(){
     +(D.length>show.length?'<p class="mut cnote">Mostrati i primi '+show.length+' piatti su '+D.length+'.</p>':'');
 }
 function drawPareto(){
-  drawTopSold();
   var el=document.getElementById('pareto');if(!el)return;
-  var D=dishes().filter(function(x){return x.sold>0}).map(function(x){return{x:x,tot:(x.c.net-x.c.dose)*x.sold}}).filter(function(x){return x.tot>0}).sort(function(a,b){return b.tot-a.tot});
-  if(D.length<3){el.innerHTML='<h3 class="ch">Chi porta il margine</h3><p class="mut cnote">Compare quando almeno 3 piatti hanno prezzo e venduto.</p>';return}
+  var G=groups(),cat=route.paretoCat||'',g=G.filter(function(x){return x.t===cat})[0];if(!g)cat='';
+  var head='<div class="mh" style="margin-bottom:8px"><h3 class="ch" style="margin:0">Chi porta il margine</h3><select data-keep class="csel" aria-label="Categoria" onchange="route.paretoCat=this.value;drawPareto()"><option value="">Tutto il menu</option>'
+    +G.map(function(x){return'<option'+(x.t===cat?' selected':'')+'>'+esc(x.t)+'</option>'}).join('')+'</select></div>';
+  var D=dishes().filter(function(x){return x.sold>0&&(!g||g.rs.indexOf(x.r)>=0)}).map(function(x){return{x:x,tot:(x.c.net-x.c.dose)*x.sold}}).filter(function(x){return x.tot>0}).sort(function(a,b){return b.tot-a.tot});
+  if(D.length<3){el.innerHTML=head+'<p class="mut cnote">Compare quando almeno 3 piatti'+(cat?' della categoria':'')+' hanno prezzo e venduto.</p>';return}
   var tot=D.reduce(function(s,d){return s+d.tot},0),cum=0,k=0;
   D.forEach(function(d,i){cum+=d.tot;d.cum=cum/tot;if(!k&&d.cum>=0.8)k=i+1});
   var show=D.slice(0,Math.min(D.length,Math.max(k,10),15));
-  el.innerHTML='<h3 class="ch">Chi porta il margine</h3><p class="mut" style="margin:0 0 10px">I primi <b>'+k+' piatti su '+D.length+'</b> producono l’80% del margine totale ('+eur0(tot)+'). In blu i piatti dentro l’80%.</p>'
+  el.innerHTML=head+'<p class="mut" style="margin:0 0 10px">I primi <b>'+k+' piatti su '+D.length+' ('+Math.round(k/D.length*100)+' %)</b> producono l’80% del margine '+(cat?'di '+esc(cat):'totale')+' ('+eur0(tot)+'). In blu i piatti dentro l’80%.</p>'
     +hbars(show.map(function(d,i){return{label:d.x.r.name,value:d.tot,text:eur0(d.tot),dim:i>=k,act:'openrecipe',id:d.x.r.id,
       tip:d.x.r.name+'\nMargine totale '+eur0(d.tot)+' ('+fmtPct(d.tot/tot)+' del totale)\nCumulato '+fmtPct(d.cum)+'\n'+Math.round(d.x.sold)+' venduti × '+eur(d.x.c.mg)}}))
     +(D.length>show.length?'<p class="mut cnote">Mostrati i primi '+show.length+' piatti.</p>':'');
@@ -844,10 +852,10 @@ function drawFc(gi,g){
   var el=document.getElementById('fc-'+gi);if(!el)return;
   var L=g.rs.map(function(r){return{r:r,c:calcR(r)}}).filter(function(x){return x.c.mg!=null&&x.c.ok});
   if(!L.length){el.innerHTML='';return}
-  var avg=L.reduce(function(s,x){return s+x.c.mg},0)/L.length,max=Math.max(avg,Math.max.apply(null,L.map(function(x){return x.c.mg})))*1.05||1;
-  el.innerHTML=hbars(L.map(function(x){return{label:x.r.name,value:Math.max(0,x.c.mg),text:eur(x.c.mg)+' · '+fmtPct(x.c.mgPct),color:x.c.mg<0?'var(--bad)':null,act:'openrecipe',id:x.r.id,
+  var IN=L.filter(function(x){return x.r.inAvg!==false}),avg=IN.length?IN.reduce(function(s,x){return s+x.c.mg},0)/IN.length:0,max=Math.max(avg,Math.max.apply(null,L.map(function(x){return x.c.mg})))*1.05||1;
+  el.innerHTML=hbars(L.map(function(x){return{label:x.r.name,value:Math.max(0,x.c.mg),text:eur(x.c.mg)+' · '+fmtPct(x.c.mgPct),color:x.c.mg<0?'var(--bad)':null,dim:x.r.inAvg===false,act:'openrecipe',id:x.r.id,
     tip:x.r.name+'\nMargine '+eur(x.c.mg)+' ('+fmtPct(x.c.mgPct)+')\nPrezzo IVA escl. '+eur(x.c.net)+' · food cost '+eur(x.c.dose)}}),{max:max,target:avg,targetLabel:'media '+eur(avg)})
-    +'<p class="mut cnote">Margine a piatto IVA esclusa · linea tratteggiata = media della categoria.</p>';
+    +'<p class="mut cnote">Margine a piatto IVA esclusa · linea tratteggiata = media della categoria'+(L.length>IN.length?' (barre chiare = piatti esclusi dalla media)':'')+'.</p>';
 }
 
 /* ---------- 4. COMPOSIZIONE DEL COSTO (ricetta) ---------- */
@@ -1079,7 +1087,7 @@ document.addEventListener('submit',function(e){
 
 /* ---------- eventi ---------- */
 function rowsOut(r){return r.rows.filter(function(x){return x.foodId||x.subId||x.name}).map(function(x){return{foodId:x.foodId||'',subId:x.subId||'',name:x.name||'',qty:x.qty,waste:x.waste}})}
-function recipeOut(r){return{name:r.name.trim(),type:r.type||'',portions:r.portions,yieldG:r.yieldG||'',price:r.price,sold:r.sold||'',time:r.time||'',rows:rowsOut(r)}}
+function recipeOut(r){return{inAvg:r.inAvg!==false,name:r.name.trim(),type:r.type||'',portions:r.portions,yieldG:r.yieldG||'',price:r.price,sold:r.sold||'',time:r.time||'',rows:rowsOut(r)}}
 function armed(t,label){if(t.dataset.armed)return true;t.dataset.armed='1';t.textContent=label;return false}
 document.addEventListener('click',function(e){
   var t=e.target.closest('[data-tab],[data-act]');if(!t)return;
