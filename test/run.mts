@@ -294,11 +294,30 @@ section("Piatto escluso dalle medie");
   ok((await B.patch("/recipes/" + rid, { inAvg: true })).status === 404, "B non può cambiare il flag di un piatto di A");
 }
 
+section("Vendite mensili");
+{
+  const dA = (await A.get("/data")).data, r1 = dA.recipes[0].id, r2 = dA.recipes[1].id;
+  r = await A.put("/sales", { period: "2026-08", items: [{ recipeId: r1, qty: 40 }, { recipeId: r2, qty: 12 }] });
+  ok(r.status === 200, "A inserisce le vendite di agosto");
+  await A.put("/sales", { period: "2026-09", items: [{ recipeId: r1, qty: 55 }] });
+  let s1 = (await A.get("/data")).data.sales;
+  ok(s1[r1]["2026-08"] === 40 && s1[r1]["2026-09"] === 55 && s1[r2]["2026-08"] === 12, "storico per mese salvato");
+  await A.put("/sales", { period: "2026-08", items: [{ recipeId: r2, qty: 0 }] });
+  s1 = (await A.get("/data")).data.sales;
+  ok(!s1[r2] || s1[r2]["2026-08"] === undefined, "quantità 0 cancella il mese");
+  ok((await A.put("/sales", { period: "2026-13", items: [] })).status === 400, "mese non valido → 400");
+  ok((await A.put("/sales", { period: "2026-08", items: [{ recipeId: rB, qty: 5 }] })).status === 403, "A non può scrivere vendite di un piatto di B");
+  ok((await B.get("/data")).data.sales[rB] === undefined, "le vendite di B restano vuote");
+  ok((await V.put("/sales", { period: "2026-08", items: [{ recipeId: r1, qty: 1 }] })).status === 403, "il viewer non può inserire vendite");
+  ok((await V.get("/data")).data.sales[r1]["2026-09"] === 55, "il viewer legge le vendite");
+}
+
 section("Dati di test, importazione, varie");
 r = await max.post("/admin/tenants", { ragione: "Demo", tipo: "Pizzeria", demo: true });
 const demo = r.data.id;
 r = await max.get("/data", { tenant: demo });
 ok(r.data.foods.length === 25 && r.data.recipes.length === 8, "cliente Demo con 25 alimenti e 8 ricette");
+ok(Object.keys(r.data.sales).length === 7, "i dati di test hanno le vendite (7 piatti venduti)");
 const marg = r.data.recipes.find((x: any) => x.name === "MARGHERITA");
 const pal = r.data.recipes.find((x: any) => x.name === "PALLINA");
 ok(marg.rows[0].subId === pal.id && pal.yieldG === 1625, "MARGHERITA contiene la PALLINA");
@@ -307,6 +326,7 @@ r = await max.post("/admin/import", { tenant: tB.id, data: exp });
 const bd = (await max.get("/data", { tenant: tB.id })).data;
 ok(bd.recipes.length === 8 && bd.recipes.find((x: any) => x.name === "MARGHERITA").rows[0].subId === bd.recipes.find((x: any) => x.name === "PALLINA").id,
   "import di un export in un altro cliente, con id ricollegati");
+ok(bd.sales[bd.recipes.find((x: any) => x.name === "MARGHERITA").id] && Object.values(bd.sales[bd.recipes.find((x: any) => x.name === "MARGHERITA").id])[0] === 220, "l'import porta anche le vendite");
 r = await A.post("/lists", { kind: "reparti", value: "X" }, { headers: { origin: "https://evil.example" } });
 ok(r.status === 403, "richiesta da un altro sito (Origin diverso) rifiutata");
 r = await A.call("POST", "/lists", "kind=reparti", { headers: { "content-type": "text/plain" } });

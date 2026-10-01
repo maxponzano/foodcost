@@ -201,6 +201,23 @@ details.tc summary::-webkit-details-marker{display:none}
 .simt td{padding:6px;border-top:1px solid var(--line);text-align:right;font-weight:600}
 .simt td:first-child,.simt th:first-child{text-align:left;font-weight:500}
 .csel{width:auto;min-height:34px;padding:4px 8px;font-size:13px;max-width:60%}
+.perbar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-bottom:12px;font-size:13px}
+.perbar select,.perbar input{width:auto;min-height:34px;padding:4px 8px;font-size:13px}
+.perbar label{display:flex;align-items:center;gap:6px;margin:0;font-size:13px}
+.perbar .sm{margin-left:auto}
+.sbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.sbar input{width:auto;min-height:38px;padding:6px 10px}
+.sbar .smt{font-family:var(--f-head);font-size:18px;text-transform:capitalize;margin-left:6px}
+.kpis3{grid-template-columns:repeat(3,1fr)}
+.srow{display:grid;grid-template-columns:1fr 110px 80px 96px;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);font-size:14px}
+.srow:last-child{border-bottom:0}
+.srow.shead{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.srow.shead span:nth-child(n+2){text-align:right}
+.srow .sin{min-height:36px;padding:6px 8px;text-align:right}
+.srow .sp,.srow .si{text-align:right;font-feature-settings:"tnum" 1}
+.srow .si{font-weight:600}
+.srow .sn em{font-style:normal;font-size:11px}
+@media (max-width:560px){.srow{grid-template-columns:1fr 84px 76px}.srow .sp{display:none}.srow.shead span:nth-child(3){display:none}.kpis3{grid-template-columns:1fr 1fr}}
 .grid-2{display:grid;grid-template-columns:1fr;gap:0;margin-bottom:12px}
 .gh .cnt{font-size:12px;color:var(--mut);font-weight:600;letter-spacing:0;margin-left:4px}
 .rgh:first-child{margin-top:4px}
@@ -257,6 +274,7 @@ details.tc summary::-webkit-details-marker{display:none}
   <button data-tab="alimenti">Alimenti</button>
   <button data-tab="ricette">Ricette</button>
   <button data-tab="marginalita">Marginalità</button>
+  <button data-tab="vendite">Vendite</button>
   <button data-tab="menu">Menù Ingegnerizzato</button>
   <button data-tab="dati">Dati</button>
   <button data-tab="clienti" id="nav-clienti" hidden>Clienti</button>
@@ -284,7 +302,7 @@ function lsSet(k,v){try{if(v==null)localStorage.removeItem(k);else localStorage.
 /* tutte le chiamate al server; le rotte dei dati portano l'attività scelta, che il server verifica */
 function api(method,path,body){
   var url='/api'+path;
-  if(CUR&&/^\/(data|tenant|lists|foods|recipes)/.test(path))url+=(url.indexOf('?')>=0?'&':'?')+'tenant='+encodeURIComponent(CUR);
+  if(CUR&&/^\/(data|tenant|lists|foods|recipes|sales)/.test(path))url+=(url.indexOf('?')>=0?'&':'?')+'tenant='+encodeURIComponent(CUR);
   var o={method:method,credentials:'same-origin',headers:{}};
   if(body!==undefined){o.headers['content-type']='application/json';o.body=JSON.stringify(body)}
   return fetch(url,o).then(function(res){
@@ -304,7 +322,7 @@ function later(key,fn,ms){clearTimeout(timers[key]);timers[key]=setTimeout(fn,ms
 
 function loadData(){
   if(!CUR){S=null;RO=true;return Promise.resolve()}
-  return api('GET','/data').then(function(d){S=d;RO=!d.canWrite})
+  return api('GET','/data').then(function(d){S=d;RO=!d.canWrite;applySales()})
     .catch(function(e){if(e.status===403||e.status===404){CUR=null;lsSet('fc:tenant',null);S=null;return}throw e});
 }
 function boot(){
@@ -320,6 +338,7 @@ function boot(){
 }
 function refreshMe(){return api('GET','/me').then(function(m){ME=m;renderTop()})}
 function switchTenant(id){
+  route.per=null;route.sm=null;
   CUR=id||null;lsSet('fc:tenant',CUR);route.food=null;route.recipe=null;route.q='';route.cat='';
   if(CUR&&route.tab==='clienti')route.tab='riepilogo';
   loadData().then(render).catch(showErr);
@@ -397,6 +416,7 @@ function render(){
   else if(!S)app.innerHTML=isSuper()?'<div class="empty">Scegli un cliente dal selettore in alto<br>oppure dalla sezione Clienti.</div>':'<div class="empty">Nessuna attività assegnata al tuo account.<br>Contatta l\'amministratore.</div>';
   else if(route.recipe)app.innerHTML=recipeEditorHTML();
   else if(route.tab==='riepilogo')app.innerHTML=riepHTML();
+  else if(route.tab==='vendite')app.innerHTML=venditeHTML();
   else if(route.tab==='alimenti')app.innerHTML=foodsHTML();
   else if(route.tab==='ricette')app.innerHTML=recipesHTML();
   else if(route.tab==='marginalita')app.innerHTML=margHTML();
@@ -407,6 +427,7 @@ function render(){
   else if(route.recipe)recalc();
   else if(route.tab==='marginalita')paintMarg();
   else if(route.tab==='menu')paintMenu();
+  else if(route.tab==='vendite')paintSales();
   applyRO();
   if(route.restoreY!=null&&!route.recipe){window.scrollTo(0,route.restoreY);route.restoreY=null}
 }
@@ -605,7 +626,7 @@ function recalc(){
 }
 
 /* ---------- MARGINALITÀ ---------- */
-var SUBS={riepilogo:'Riepilogo del locale',alimenti:'Anagrafica alimenti e prezzi',ricette:'Ricettario e food cost',marginalita:'Food cost e margini per piatto',menu:'Menù Ingegnerizzato',dati:'Anagrafica attività e liste',clienti:'Pannello clienti'};
+var SUBS={vendite:'Vendite mese per mese',riepilogo:'Riepilogo del locale',alimenti:'Anagrafica alimenti e prezzi',ricette:'Ricettario e food cost',marginalita:'Food cost e margini per piatto',menu:'Menù Ingegnerizzato',dati:'Anagrafica attività e liste',clienti:'Pannello clienti'};
 function subt(){
   var e0=document.getElementById('sub');
   if(route.tab==='clienti'||!S){if(e0)e0.textContent=route.tab==='clienti'?SUBS.clienti:'';return}
@@ -671,12 +692,12 @@ function classify(x,aJ,aG,aK){
 }
 function menuHTML(){
   if(!S.recipes.length)return'<div class="empty">Nessuna ricetta.<br>Creale nella sezione Ricette.</div>';
-  return paretoHTML()+'<details class="lg"><summary>Come si legge</summary><p>Ogni piatto è confrontato con la <b>media della sua categoria</b> su tre aspetti: vendite (popolarità), margine in € (profittabilità) e tempo di preparazione. Il prezzo si inserisce in Marginalità.</p>'
+  return periodBarHTML()+paretoHTML()+'<details class="lg"><summary>Come si legge</summary><p>Ogni piatto è confrontato con la <b>media della sua categoria</b> su tre aspetti: vendite (popolarità), margine in € (profittabilità) e tempo di preparazione. Il prezzo si inserisce in Marginalità.</p>'
   +'<p><b>Fuoriclasse</b>: vende e rende sopra media. <b>Instancabili</b>: vende molto, rende poco. <b>Diamanti grezzi</b>: rende ma vende poco. <b>Rami secchi</b>: né l’uno né l’altro. “Veloci” = tempo sotto la media della categoria.</p><p>Nel <b>grafico</b> ogni puntino è un piatto: più è a destra più guadagni per piatto, più è in alto più ne vendi. Le linee tratteggiate sono le medie della categoria.</p></details>'
   +groups().map(function(g,gi){
     return'<h2 class="gh">'+esc(g.t)+'</h2><div class="card mt m9"><div class="qchart" id="qc-'+gi+'"></div><div class="thead"><span>Piatto</span><div><span>Venduto</span><span>Tempo min</span><span>Margine €</span><span>Margine %</span><span>Moltipl.</span><span>Incasso</span><span>Food cost tot.</span><span>Margine tot.</span><span>% su categ.</span></div></div>'+g.rs.map(function(r){
       return'<div class="mrow"><div class="mname"><div class="mh"><b class="rlink" data-act="openrecipe" data-id="'+r.id+'" title="Apri la ricetta">'+esc(r.name)+'</b><span class="badge" id="bd-'+r.id+'"></span></div><div class="mut" id="bh-'+r.id+'" style="margin-top:2px"></div></div>'
-      +'<div class="kgrid"><label><span class="kl">Venduto (n.)</span><input type="number" inputmode="numeric" value="'+esc(r.sold||'')+'" oninput="setMenu(\''+r.id+'\',\'sold\',this.value)"></label>'
+      +'<div class="kgrid"><div class="kv"><span class="kl">Venduto (n.)</span><b id="xv-'+r.id+'"></b></div>'
       +'<label><span class="kl">Tempo prep.+serv. (min)</span><input type="number" inputmode="decimal" value="'+esc(r.time||'')+'" oninput="setMenu(\''+r.id+'\',\'time\',this.value)"></label>'
       +'<div class="kv"><span class="kl">Margine € (netto)</span><b id="xg-'+r.id+'"></b></div>'
       +'<div class="kv"><span class="kl">Margine %</span><b id="xq-'+r.id+'"></b></div><div class="kv"><span class="kl">Moltiplicatore</span><b id="xm-'+r.id+'"></b></div><div class="kv"><span class="kl">Incasso totale</span><b id="xi-'+r.id+'"></b></div>'
@@ -766,6 +787,7 @@ function paintMenu(){
       if(bd){bd.textContent=cl.t;bd.className='badge '+cl.c}
       setT('bh-'+id,cl.h);
       var has=x.net>0&&x.c.ok;
+      setT('xv-'+id,x.sold>0?Math.round(x.sold).toLocaleString('it-IT'):'—');
       setT('xg-'+id,has?eur(x.mg):'—');setT('xq-'+id,has?pct(x.mg/x.net):'—');
       setT('xm-'+id,has&&x.fc>0?(x.net/x.fc).toFixed(2).replace('.',',')+'x':'—');
       setT('xi-'+id,has&&x.sold>0?eur(x.net*x.sold):'—');setT('xf-'+id,has&&x.sold>0?eur(x.fc*x.sold):'—');
@@ -821,7 +843,7 @@ function riepHTML(){
   if(!S.recipes.length)return'<div class="empty">Nessuna ricetta.<br>Creale nella sezione Ricette.</div>';
   if(!D.length)return'<div class="empty">Per il riepilogo servono ricette con ingredienti e prezzo di vendita.<br>Inserisci i prezzi in Marginalità.</div>';
   var tile=function(lbl,val,sub,cls){return'<div class="kpi"><span>'+lbl+'</span><b class="'+(cls||'')+'">'+val+'</b><em>'+sub+'</em></div>'};
-  var h='<div class="kpis">'
+  var h=periodBarHTML()+'<div class="kpis">'
     +tile('Food cost medio',fmtPct(A.fcPct),A.useSold?'pesato sul venduto':'media semplice (manca il venduto)',fcClass(A.fcPct))
     +tile(A.useSold?'Incasso (IVA escl.)':'Prezzo medio IVA escl.',A.useSold?eur0(A.inc):eur(A.inc/A.n),A.useSold?A.sold.toLocaleString('it-IT')+' piatti venduti':D.length+' piatti con prezzo')
     +tile(A.useSold?'Margine totale':'Margine medio a piatto',A.useSold?eur0(A.mg):eur(A.mgUnit),A.useSold?'margine medio '+eur(A.mgUnit)+' a piatto':'IVA esclusa')
@@ -964,6 +986,80 @@ function paintSim(){
     +row('Margine medio a piatto',A.mgUnit,B.mgUnit,eur,true)
     +'<tr><td>Piatti oltre obiettivo</td><td>'+A.over+'</td><td>'+B.over+'</td><td class="'+(B.over>A.over?'bad':B.over<A.over?'ok':'')+'">'+(B.over-A.over>0?'+':'')+(B.over-A.over)+'</td></tr></table>';
 }
+
+/* =====================================================================
+   VENDITE (storico mensile) e periodo di analisi
+   ===================================================================== */
+var MESI=['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+function mLabel(m){var p=m.split('-');return MESI[+p[1]-1]+' '+p[0]}
+function mAdd(m,n){var p=m.split('-'),d=new Date(+p[0],+p[1]-1+n,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
+function thisMonth(){return new Date().toISOString().slice(0,7)}
+function salesMonths(){var set={};Object.keys(S.sales||{}).forEach(function(id){Object.keys(S.sales[id]).forEach(function(m){if(S.sales[id][m]>0)set[m]=1})});return Object.keys(set).sort()}
+/* periodo scelto per l'analisi (Menù Ingegnerizzato e Riepilogo) */
+function periodRange(){
+  var P=route.per||(route.per={mode:'last'}),ms=salesMonths(),last=ms.length?ms[ms.length-1]:thisMonth(),from,to,label;
+  if(P.mode==='3m'){to=last;from=mAdd(last,-2);label='ultimi 3 mesi ('+mLabel(from)+' – '+mLabel(to)+')'}
+  else if(P.mode==='year'){var y=last.slice(0,4);from=y+'-01';to=y+'-12';label='anno '+y}
+  else if(P.mode==='all'){from=ms[0]||last;to=last;label='tutto lo storico'}
+  else if(P.mode==='custom'){from=P.from||last;to=P.to||last;if(from>to){var t=from;from=to;to=t}label=from===to?mLabel(from):mLabel(from)+' – '+mLabel(to)}
+  else{from=to=last;label=mLabel(last)}
+  return{from:from,to:to,label:label,last:last};
+}
+/* il "venduto" di ogni piatto = somma delle vendite nel periodo scelto */
+function applySales(){
+  if(!S)return;var R=periodRange();
+  S.recipes.forEach(function(r){var s=(S.sales||{})[r.id]||{},t=0;Object.keys(s).forEach(function(m){if(m>=R.from&&m<=R.to)t+=s[m]});r.sold=t||''});
+}
+function setPer(k,v){route.per=route.per||{mode:'last'};route.per[k]=v;if(k==='mode'&&v==='custom'){var R=periodRange();route.per.from=route.per.from||R.last;route.per.to=route.per.to||R.last}applySales();render()}
+function periodBarHTML(){
+  var P=route.per||{mode:'last'},R=periodRange(),ms=salesMonths();
+  var tot=S.recipes.reduce(function(s,r){return s+num(r.sold)},0);
+  var o=function(v,t){return'<option value="'+v+'"'+(P.mode===v?' selected':'')+'>'+t+'</option>'};
+  return'<div class="perbar"><b>Periodo vendite</b><select data-keep onchange="setPer(\'mode\',this.value)">'
+    +o('last','Ultimo mese con vendite')+o('3m','Ultimi 3 mesi')+o('year','Anno intero')+o('all','Tutto lo storico')+o('custom','Scegli i mesi…')+'</select>'
+    +(P.mode==='custom'?'<label>da<input data-keep type="month" value="'+esc(R.from)+'" onchange="setPer(\'from\',this.value)"></label><label>a<input data-keep type="month" value="'+esc(R.to)+'" onchange="setPer(\'to\',this.value)"></label>':'')
+    +'<span class="mut">'+esc(R.label)+' · '+tot.toLocaleString('it-IT')+' piatti venduti'+(ms.length?'':' · nessuna vendita inserita')+'</span>'
+    +(RO?'':'<button class="sm" data-tab="vendite">Inserisci le vendite →</button>')+'</div>';
+}
+/* pagina Vendite */
+var SPEND={};
+function salesMonthSel(){if(!route.sm){var ms=salesMonths();route.sm=ms.length?ms[ms.length-1]:thisMonth()}return route.sm}
+function venditeHTML(){
+  if(!S.recipes.length)return'<div class="empty">Nessuna ricetta.<br>Creale nella sezione Ricette.</div>';
+  var m=salesMonthSel(),ms=salesMonths();
+  var h='<div class="sbar"><button class="sm" data-act="smprev" aria-label="Mese precedente">‹</button><input data-keep type="month" value="'+m+'" onchange="route.sm=this.value||thisMonth();render()"><button class="sm" data-act="smnext" aria-label="Mese successivo">›</button>'
+    +'<b class="smt">'+mLabel(m)+'</b><span id="svstat" class="mut"></span></div>'
+    +'<div class="kpis kpis3"><div class="kpi"><span>Piatti venduti nel mese</span><b id="sv-tq"></b><em id="sv-tn"></em></div><div class="kpi"><span>Incasso (IVA escl.)</span><b id="sv-ti"></b><em>prezzo di vendita × pezzi</em></div><div class="kpi"><span>Mesi con vendite</span><b>'+ms.length+'</b><em>'+(ms.length?mLabel(ms[0])+' – '+mLabel(ms[ms.length-1]):'nessuno')+'</em></div></div>'
+    +(RO?'':'<p class="mut" style="margin:0 0 6px">Scrivi i pezzi venduti e premi <b>Invio</b> per passare al piatto successivo. Il salvataggio è automatico.</p>');
+  h+=groups().map(function(g,gi){
+    return'<h2 class="gh">'+esc(g.t)+' <span class="cnt" id="sg-'+gi+'"></span></h2><div class="card st"><div class="srow shead"><span>Piatto</span><span>Pezzi venduti</span><span>Prezzo</span><span>Incasso</span></div>'
+      +g.rs.map(function(r){var q=((S.sales||{})[r.id]||{})[m]||'';var p=num(r.price);
+        return'<div class="srow"><span class="sn">'+esc(r.name)+(p>0?'':' <em class="mut">senza prezzo</em>')+'</span><input class="sin" type="number" inputmode="numeric" min="0" step="1" data-rid="'+r.id+'" value="'+esc(q)+'" oninput="setSale(this)" placeholder="0">'
+          +'<span class="sp">'+(p>0?eur(p):'—')+'</span><span class="si" id="si-'+r.id+'"></span></div>'}).join('')+'</div>';
+  }).join('');
+  return h;
+}
+function paintSales(){
+  var m=salesMonthSel(),tq=0,ti=0,n=0;
+  groups().forEach(function(g,gi){var gq=0;g.rs.forEach(function(r){var q=((S.sales||{})[r.id]||{})[m]||0,c=calcR(r),inc=c.net>0?c.net*q:0;gq+=q;tq+=q;ti+=inc;if(q)n++;setT('si-'+r.id,q&&c.net>0?eur(inc):'—')});setT('sg-'+gi,gq?gq.toLocaleString('it-IT')+' pezzi':'')});
+  setT('sv-tq',tq.toLocaleString('it-IT'));setT('sv-tn',n+' piatti con vendite');setT('sv-ti',eur0(ti));
+}
+function setSale(inp){
+  var id=inp.dataset.rid,m=salesMonthSel(),v=Math.max(0,num(inp.value));
+  S.sales=S.sales||{};S.sales[id]=S.sales[id]||{};if(v)S.sales[id][m]=v;else delete S.sales[id][m];
+  SPEND[id]=v;applySales();paintSales();setT('svstat','Modifiche da salvare…');
+  later('sales',flushSales,700);
+}
+function flushSales(){
+  var m=salesMonthSel(),items=Object.keys(SPEND).map(function(id){return{recipeId:id,qty:SPEND[id]}});if(!items.length)return;SPEND={};
+  setT('svstat','Salvataggio…');
+  api('PUT','/sales',{period:m,items:items}).then(function(){setT('svstat','Salvato ✓')}).catch(function(e){setT('svstat','');showErr(e)});
+}
+document.addEventListener('keydown',function(e){
+  if(e.key!=='Enter'||!e.target.classList||!e.target.classList.contains('sin'))return;
+  e.preventDefault();var all=[].slice.call(document.querySelectorAll('.sin')),i=all.indexOf(e.target);
+  if(all[i+1]){all[i+1].focus();all[i+1].select()}else e.target.blur();
+});
 
 /* ---------- DATI ---------- */
 function setTen(k,v){
@@ -1123,7 +1219,7 @@ function recipeOut(r){return{inAvg:r.inAvg!==false,name:r.name.trim(),type:r.typ
 function armed(t,label){if(t.dataset.armed)return true;t.dataset.armed='1';t.textContent=label;return false}
 document.addEventListener('click',function(e){
   var t=e.target.closest('[data-tab],[data-act]');if(!t)return;
-  if(t.dataset.tab){route.tab=t.dataset.tab;route.recipe=null;route.from=null;route.food=null;route.cat='';route.q='';if(route.tab==='clienti'){ADM&&(ADM.msg='');ADM=null}render();window.scrollTo(0,0);return}
+  if(t.dataset.tab){if(typeof flushSales==='function'&&S)flushSales();route.tab=t.dataset.tab;route.recipe=null;route.from=null;route.food=null;route.cat='';route.q='';if(route.tab==='clienti'){ADM&&(ADM.msg='');ADM=null}render();window.scrollTo(0,0);return}
   var a=t.dataset.act,id=t.dataset.id;
   /* clic sullo sfondo scuro di una scheda: chiude solo se non si è cliccato dentro la scheda */
   if(a==='closebg'){if(e.target!==t)return;if(route.pw){if(!route.pw.forced)route.pw=null}else{route.food=null;route.bulk=null}render();return}
@@ -1159,6 +1255,7 @@ document.addEventListener('click',function(e){
   /* dati dell'attività */
   if(!S)return;
   if(a==='newfood'){var lf=lockFood();if(lf){showLock(lf);return}route.food={id:uid(),isNew:true,name:'',category:'',supplier:'',unit:'kg',mode:'max',packQty:'',packUnit:'g',history:[]};render()}
+  else if(a==='smprev'||a==='smnext'){flushSales();route.sm=mAdd(salesMonthSel(),a==='smprev'?-1:1);render()}
   else if(a==='editfood'){route.food=clone(foodById(id));render()}
   else if(a==='ingfood'){var fi=foodById(id);if(!fi)return;route.food=clone(fi);render()}
   else if(a==='bulkmode'){if(RO)return;var vf=visibleFoods();if(!vf.length){toast('Nessun alimento in elenco.');return}
