@@ -119,15 +119,20 @@ details.tc summary{cursor:pointer;display:flex;justify-content:space-between;gap
 details.tc summary::-webkit-details-marker{display:none}
 .sm-list{font-size:13px;color:var(--mut);margin:6px 0}
 /* grafico a quadranti del menu engineering */
-.qchart{position:relative;margin:2px 0 10px}
-.qchart svg{width:100%;height:auto;display:block;overflow:visible}
-.qchart .ax{stroke:var(--line);stroke-width:1}
-.qchart .avgl{stroke:var(--mut);stroke-width:1;stroke-dasharray:4 4}
-.qchart text{fill:var(--mut);font-size:10px;font-family:inherit}
-.qchart .ql{font-size:10px;font-weight:700;letter-spacing:.04em}
+.qchart{position:relative;margin:2px 0 14px}
+.qchart svg{display:block;max-width:100%;height:auto;overflow:visible;font-family:var(--f-body)}
+.qchart .qbg{opacity:.07}
+.qchart .grid{stroke:var(--line);stroke-width:1}
+.qchart .ax{stroke:var(--mut);stroke-width:1;opacity:.6}
+.qchart .avgl{stroke:var(--ink);stroke-width:1;stroke-dasharray:3 4;opacity:.55}
+.qchart text{fill:var(--mut);font-size:11px}
+.qchart .tk{font-size:11px;font-feature-settings:"tnum" 1}
+.qchart .at{font-size:11px;font-weight:500}
+.qchart .avt{font-size:11px;font-weight:600;fill:var(--ink)}
+.qchart .ql{font-size:10.5px;font-weight:700;letter-spacing:.06em}
 .qchart .dot{stroke:var(--card);stroke-width:2}
 .qchart .qhit{fill:transparent;cursor:pointer}
-.qchart .dot.on{stroke:var(--ink)}
+.qchart .dot.on{stroke:var(--ink);stroke-width:2.5}
 .qtip{position:absolute;display:none;pointer-events:none;background:var(--ink);color:var(--bg);border-radius:8px;padding:6px 9px;font-size:12px;line-height:1.35;white-space:nowrap;z-index:3;transform:translate(-50%,calc(-100% - 10px))}
 .qleg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--mut);margin-top:4px}
 .qleg span{display:inline-flex;align-items:center;gap:5px}
@@ -168,11 +173,11 @@ details.tc summary::-webkit-details-marker{display:none}
 #t-comp{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-top:12px}
 #t-comp:empty{display:none}
 .pchart{margin:10px 0 4px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
-.pchart svg{width:100%;height:auto;max-height:190px;display:block;margin-top:6px}
-.pchart text{fill:var(--mut);font-size:10px}
+.pchart svg{display:block;max-width:100%;height:auto;margin-top:8px;font-family:var(--f-body)}
+.pchart text{fill:var(--mut);font-size:11px;font-feature-settings:"tnum" 1}
 .pchart .ax{stroke:var(--line)}.pchart .avgl{stroke:var(--mut);stroke-dasharray:4 4}
 .pchart .pl{fill:none;stroke:var(--brand);stroke-width:2}
-.pchart .pdot{fill:var(--brand);stroke:var(--card);stroke-width:2}
+.pchart .pdot{fill:var(--brand);stroke:var(--card);stroke-width:2;r:5}
 .pchart .qhit{fill:transparent;cursor:pointer}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .pchart .pl{stroke:var(--brand-soft)}:root:not([data-theme="light"]) .pchart .pdot{fill:var(--brand-soft)}}
 :root[data-theme="dark"] .pchart .pl{stroke:var(--brand-soft)}:root[data-theme="dark"] .pchart .pdot{fill:var(--brand-soft)}
@@ -221,7 +226,7 @@ details.tc summary::-webkit-details-marker{display:none}
   .mt.m9 .kgrid,.mt.m9 .thead>div{display:grid;grid-template-columns:repeat(9,1fr);gap:8px}
   .thead>div span{text-align:right}
   .mt .mname b{font-size:14px}
-  .qchart{max-width:560px}
+  .qchart{max-width:720px}
   /* editor ricetta su due colonne */
   .redit{display:grid;grid-template-columns:1fr 380px;gap:24px;align-items:start}
   .redit .rright{position:sticky;top:70px}
@@ -669,39 +674,53 @@ function menuHTML(){
 }
 /* grafico: margine € in orizzontale, venduto in verticale, linee alle medie della categoria */
 var QUAD={'++':['Fuoriclasse','--q1'],'+-':['Instancabili','--q2'],'-+':['Diamanti grezzi','--q3'],'--':['Rami secchi','--q4']};
+/* valori "tondi" per gli assi */
+function niceTicks(lo,hi,n){
+  var span=hi-lo||1,step=Math.pow(10,Math.floor(Math.log10(span/n))),m=span/n/step;
+  step*=m>=5?10:m>=2?5:m>=1?2:1;
+  var out=[],v=Math.ceil(lo/step)*step;
+  for(;v<=hi+1e-9;v+=step)out.push(+v.toFixed(6));
+  return{ticks:out,step:step};
+}
+function fmtTick(v,step){var d=step<1?2:0;return v.toLocaleString('it-IT',{minimumFractionDigits:d,maximumFractionDigits:d})}
+/* grafico a quadranti disegnato a dimensione reale: i caratteri restano a 11-12 px su ogni schermo */
 function drawQuadrant(gi,it,aJ,aG,aK){
   var el=document.getElementById('qc-'+gi);if(!el)return;
   if(it.length<2){el.innerHTML='<div class="qnote">Il grafico compare quando almeno 2 piatti della categoria hanno prezzo e venduto.</div>';return}
-  var W=340,H=250,L=38,R=10,T=14,B=34,pw=W-L-R,ph=H-T-B;
+  var W=Math.max(280,Math.min(el.clientWidth||520,720)),H=W<480?250:300,L=46,R=16,T=26,B=40,pw=W-L-R,ph=H-T-B;
   var mgs=it.map(function(x){return x.mg}),sds=it.map(function(x){return x.sold});
-  // l'asse del margine si adatta ai piatti (non parte per forza da 0), con un po' di aria ai lati
-  var mn=Math.min.apply(null,mgs.concat([aG])),mx=Math.max.apply(null,mgs.concat([aG])),pad=Math.max((mx-mn)*0.12,0.5);
-  var x0=Math.max(Math.min(0,mn),mn-pad),x1=mx+pad,y1=Math.max.apply(null,sds)*1.12||1;
+  var mn=Math.min.apply(null,mgs.concat([aG])),mx=Math.max.apply(null,mgs.concat([aG])),pad=Math.max((mx-mn)*0.12,0.25);
+  var xt=niceTicks(mn-pad,mx+pad,W<480?3:5),x0=Math.min(mn-pad,xt.ticks[0]),x1=Math.max(mx+pad,xt.ticks[xt.ticks.length-1]);
+  var yt=niceTicks(0,Math.max.apply(null,sds)*1.1,4),y1=Math.max(Math.max.apply(null,sds)*1.1,yt.ticks[yt.ticks.length-1]);
   var X=function(v){return L+(v-x0)/(x1-x0)*pw},Y=function(v){return T+ph-v/y1*ph};
-  var ax=X(aG),ay=Y(aJ),h='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Grafico a quadranti: margine e venduto dei piatti">';
-  h+='<line class="ax" x1="'+L+'" y1="'+(T+ph)+'" x2="'+(L+pw)+'" y2="'+(T+ph)+'"/><line class="ax" x1="'+L+'" y1="'+T+'" x2="'+L+'" y2="'+(T+ph)+'"/>';
-  h+='<line class="avgl" x1="'+ax+'" y1="'+T+'" x2="'+ax+'" y2="'+(T+ph)+'"/><line class="avgl" x1="'+L+'" y1="'+ay+'" x2="'+(L+pw)+'" y2="'+ay+'"/>';
-  // nomi dei quadranti negli angoli (l'informazione non sta solo nel colore)
-  h+='<text class="ql" x="'+(L+pw-2)+'" y="'+(T+10)+'" text-anchor="end" style="fill:var(--q1)">FUORICLASSE</text>'
-    +'<text class="ql" x="'+(L+4)+'" y="'+(T+10)+'" style="fill:var(--q2)">INSTANCABILI</text>'
-    +'<text class="ql" x="'+(L+pw-2)+'" y="'+(T+ph-5)+'" text-anchor="end" style="fill:var(--q3)">DIAMANTI GREZZI</text>'
-    +'<text class="ql" x="'+(L+4)+'" y="'+(T+ph-5)+'" style="fill:var(--q4)">RAMI SECCHI</text>';
-  // assi: poche etichette
-  h+='<text x="'+L+'" y="'+(T+ph+13)+'" text-anchor="middle">'+eur(x0,0)+'</text><text x="'+ax+'" y="'+(T+ph+13)+'" text-anchor="middle">media '+eur(aG)+'</text>'
-    +'<text x="'+(L+pw)+'" y="'+(T+ph+13)+'" text-anchor="end">'+eur(x1,0)+'</text>'
-    +'<text x="'+(L+pw/2)+'" y="'+(H-3)+'" text-anchor="middle">Margine € per piatto →</text>'
-    +'<text x="'+(L-5)+'" y="'+(T+ph)+'" text-anchor="end" dy="3">0</text><text x="'+(L-5)+'" y="'+ay+'" text-anchor="end" dy="3">'+Math.round(aJ)+'</text>'
-    +'<text x="'+(L-5)+'" y="'+(T+6)+'" text-anchor="end">'+Math.round(y1)+'</text>'
-    +'<text transform="translate(10 '+(T+ph/2)+') rotate(-90)" text-anchor="middle">Venduto (n.) →</text>';
+  var ax=X(aG),ay=Y(aJ),h='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Grafico a quadranti: margine e venduto dei piatti">';
+  // quadranti colorati in trasparenza
+  h+='<rect x="'+ax+'" y="'+T+'" width="'+(L+pw-ax)+'" height="'+(ay-T)+'" style="fill:var(--q1)" class="qbg"/>'
+    +'<rect x="'+L+'" y="'+T+'" width="'+(ax-L)+'" height="'+(ay-T)+'" style="fill:var(--q2)" class="qbg"/>'
+    +'<rect x="'+ax+'" y="'+ay+'" width="'+(L+pw-ax)+'" height="'+(T+ph-ay)+'" style="fill:var(--q3)" class="qbg"/>'
+    +'<rect x="'+L+'" y="'+ay+'" width="'+(ax-L)+'" height="'+(T+ph-ay)+'" style="fill:var(--q4)" class="qbg"/>';
+  // griglia e valori degli assi
+  xt.ticks.forEach(function(v){if(v<x0||v>x1)return;var x=X(v);h+='<line class="grid" x1="'+x+'" y1="'+T+'" x2="'+x+'" y2="'+(T+ph)+'"/><text class="tk" x="'+x+'" y="'+(T+ph+16)+'" text-anchor="middle">'+fmtTick(v,xt.step)+' €</text>'});
+  yt.ticks.forEach(function(v){var y=Y(v);h+='<line class="grid" x1="'+L+'" y1="'+y+'" x2="'+(L+pw)+'" y2="'+y+'"/><text class="tk" x="'+(L-8)+'" y="'+(y+4)+'" text-anchor="end">'+fmtTick(v,1)+'</text>'});
+  h+='<line class="ax" x1="'+L+'" y1="'+(T+ph)+'" x2="'+(L+pw)+'" y2="'+(T+ph)+'"/>';
+  // medie
+  h+='<line class="avgl" x1="'+ax+'" y1="'+T+'" x2="'+ax+'" y2="'+(T+ph)+'"/><line class="avgl" x1="'+L+'" y1="'+ay+'" x2="'+(L+pw)+'" y2="'+ay+'"/>'
+    +'<text class="avt" x="'+ax+'" y="'+(T-8)+'" text-anchor="middle">media '+eur(aG)+'</text>'
+    +'<text class="avt" x="'+(L+pw)+'" y="'+(ay-6)+'" text-anchor="end">media '+Math.round(aJ)+'</text>';
+  // nomi dei quadranti, piccoli negli angoli
+  var q=function(x,y,anc,c,t){return'<text class="ql" x="'+x+'" y="'+y+'" text-anchor="'+anc+'" style="fill:var('+c+')">'+t+'</text>'};
+  h+=q(L+pw-8,T+16,'end','--q1','FUORICLASSE')+q(L+8,T+16,'start','--q2','INSTANCABILI')+q(L+pw-8,T+ph-8,'end','--q3','DIAMANTI GREZZI')+q(L+8,T+ph-8,'start','--q4','RAMI SECCHI');
+  // titoli degli assi, orizzontali
+  h+='<text class="at" x="'+(L+pw)+'" y="'+(H-4)+'" text-anchor="end">Margine per piatto (IVA escl.) →</text><text class="at" x="'+L+'" y="'+(T-8)+'" text-anchor="start">↑ Venduto (pezzi)</text>';
   var dots='',hits='';
   it.forEach(function(x,i){
-    var k=(x.sold<aJ?'-':'+')+(x.mg<aG?'-':'+'),q=QUAD[k],fast=x.tm>0&&x.tm<aK,cx=X(x.mg).toFixed(1),cy=Y(x.sold).toFixed(1);
-    dots+='<circle class="dot" id="qd-'+gi+'-'+i+'" cx="'+cx+'" cy="'+cy+'" r="5.5" style="fill:var('+q[1]+')"/>';
-    hits+='<circle class="qhit" cx="'+cx+'" cy="'+cy+'" r="13" data-d="qd-'+gi+'-'+i+'" data-n="'+esc(x.r.name)+'" data-t="'+esc(q[0]+(fast?' veloci':''))+'" data-m="'+esc(eur(x.mg))+'" data-s="'+Math.round(x.sold)+'"/>';
+    var k=(x.sold<aJ?'-':'+')+(x.mg<aG?'-':'+'),qq=QUAD[k],fast=x.tm>0&&x.tm<aK,cx=X(x.mg).toFixed(1),cy=Y(x.sold).toFixed(1);
+    dots+='<circle class="dot" id="qd-'+gi+'-'+i+'" cx="'+cx+'" cy="'+cy+'" r="6" style="fill:var('+qq[1]+')"/>';
+    hits+='<circle class="qhit" cx="'+cx+'" cy="'+cy+'" r="14" data-d="qd-'+gi+'-'+i+'" data-n="'+esc(x.r.name)+'" data-t="'+esc(qq[0]+(fast?' veloci':''))+'" data-m="'+esc(eur(x.mg))+'" data-s="'+Math.round(x.sold)+'"/>';
   });
   h+=dots+hits+'</svg><div class="qtip"></div><div class="qleg">'
     +['--q1','--q2','--q3','--q4'].map(function(c,i){return'<span><i style="background:var('+c+')"></i>'+['Fuoriclasse','Instancabili','Diamanti grezzi','Rami secchi'][i]+'</span>'}).join('')
-    +'<span class="mut">tocca un puntino per il nome</span></div>';
+    +'<span class="mut">· passa sopra un punto per il nome</span></div>';
   el.innerHTML=h;
 }
 function qTip(e){
@@ -717,6 +736,7 @@ function qTip(e){
   tip.style.display='block';tip.style.top=(cb.top+cb.height/2-wb.top)+'px';
   tip.style.left=Math.max(70,Math.min(wb.width-70,left))+'px';
 }
+window.addEventListener('resize',function(){later('rsz',function(){if(S&&route.tab==='menu'&&!route.recipe)paintMenu()},200)});
 document.addEventListener('mouseover',qTip);document.addEventListener('click',qTip);
 function avgOf(a){return a.length?a.reduce(function(s,v){return s+v},0)/a.length:0}
 function paintMenu(){
@@ -876,13 +896,13 @@ function drawComp(r){
 function priceChartHTML(f){
   var h=(f.history||[]).filter(function(x){return x.price>0}).slice().sort(function(a,b){return a.date<b.date?-1:1});
   if(h.length<2)return'';
-  var W=560,H=170,L=56,R=12,T=14,B=24,pw=W-L-R,ph=H-T-B;
+  var W=Math.max(260,Math.min(616,window.innerWidth-74)),H=160,L=64,R=14,T=16,B=26,pw=W-L-R,ph=H-T-B;
   var ts=h.map(function(x){return new Date(x.date).getTime()}),t0=ts[0],t1=ts[ts.length-1]===t0?t0+1:ts[ts.length-1];
   var ps=h.map(function(x){return x.price}),mn=Math.min.apply(null,ps),mx=Math.max.apply(null,ps),pad=(mx-mn)*0.15||mx*0.1||1,y0=mn-pad,y1=mx+pad;
   var X=function(t){return L+(t-t0)/(t1-t0)*pw},Y=function(p){return T+ph-(p-y0)/(y1-y0)*ph};
   var used=selPrice(f),pts=h.map(function(x,i){return X(ts[i]).toFixed(1)+','+Y(x.price).toFixed(1)}).join(' ');
   var first=ps[0],last=ps[ps.length-1],dv=(last-first)/first;
-  var s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Andamento del prezzo">'
+  var s='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Andamento del prezzo">'
     +'<line class="ax" x1="'+L+'" y1="'+(T+ph)+'" x2="'+(L+pw)+'" y2="'+(T+ph)+'"/>'
     +(used!=null?'<line class="avgl" x1="'+L+'" y1="'+Y(used)+'" x2="'+(L+pw)+'" y2="'+Y(used)+'"/><text x="'+(L+pw)+'" y="'+(Y(used)-4)+'" text-anchor="end">usato: '+esc(MODES[f.mode||'max'].toLowerCase())+'</text>':'')
     +'<text x="'+(L-6)+'" y="'+(Y(mx)+3)+'" text-anchor="end">'+esc(eurp(mx))+'</text>'+(mx!==mn?'<text x="'+(L-6)+'" y="'+(Y(mn)+3)+'" text-anchor="end">'+esc(eurp(mn))+'</text>':'')
