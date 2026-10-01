@@ -180,6 +180,7 @@ details.tc summary::-webkit-details-marker{display:none}
 .simt th{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;text-align:right;padding:4px 6px;font-weight:600}
 .simt td{padding:6px;border-top:1px solid var(--line);text-align:right;font-weight:600}
 .simt td:first-child,.simt th:first-child{text-align:left;font-weight:500}
+.csel{width:auto;min-height:34px;padding:4px 8px;font-size:13px;max-width:60%}
 .grid-2{display:grid;grid-template-columns:1fr;gap:0;margin-bottom:12px}
 .gh .cnt{font-size:12px;color:var(--mut);font-weight:600;letter-spacing:0;margin-left:4px}
 .rgh:first-child{margin-top:4px}
@@ -813,10 +814,13 @@ function riepHTML(){
 function paretoHTML(){return'<div class="grid-2"><div class="card" id="pareto"></div><div class="card" id="topsold"></div></div>'}
 function drawTopSold(){
   var el=document.getElementById('topsold');if(!el)return;
-  var D=S.recipes.map(function(r){return{r:r,c:calcR(r),sold:num(r.sold)}}).filter(function(x){return x.sold>0}).sort(function(a,b){return b.sold-a.sold});
-  if(!D.length){el.innerHTML='<h3 class="ch">Piatti più venduti</h3><p class="mut cnote">Inserisci il venduto nella tabella qui sotto.</p>';return}
+  var G=groups(),cat=route.topCat||'',g=G.filter(function(x){return x.t===cat})[0];if(!g)cat='';
+  var head='<div class="mh" style="margin-bottom:8px"><h3 class="ch" style="margin:0">Piatti più venduti</h3><select data-keep class="csel" aria-label="Categoria" onchange="route.topCat=this.value;drawTopSold()"><option value="">Tutto il menu</option>'
+    +G.map(function(x){return'<option'+(x.t===cat?' selected':'')+'>'+esc(x.t)+'</option>'}).join('')+'</select></div>';
+  var D=(g?g.rs:S.recipes).map(function(r){return{r:r,c:calcR(r),sold:num(r.sold)}}).filter(function(x){return x.sold>0}).sort(function(a,b){return b.sold-a.sold});
+  if(!D.length){el.innerHTML=head+'<p class="mut cnote">'+(cat?'Nessun piatto venduto in questa categoria.':'Inserisci il venduto nella tabella qui sotto.')+'</p>';return}
   var tot=D.reduce(function(s,x){return s+x.sold},0),show=D.slice(0,15);
-  el.innerHTML='<h3 class="ch">Piatti più venduti</h3><p class="mut" style="margin:0 0 10px">'+tot.toLocaleString('it-IT')+' piatti venduti in tutto; i primi 5 sono il '+fmtPct(D.slice(0,5).reduce(function(s,x){return s+x.sold},0)/tot)+'.</p>'
+  el.innerHTML=head+'<p class="mut" style="margin:0 0 10px">'+tot.toLocaleString('it-IT')+' piatti venduti '+(cat?'in '+esc(cat):'in tutto')+(D.length>5?'; i primi 5 sono il '+fmtPct(D.slice(0,5).reduce(function(s,x){return s+x.sold},0)/tot):'')+'.</p>'
     +hbars(show.map(function(x){var has=x.c.net>0&&x.c.ok;return{label:x.r.name,value:x.sold,text:Math.round(x.sold).toLocaleString('it-IT'),act:'openrecipe',id:x.r.id,
       tip:x.r.name+'\n'+Math.round(x.sold)+' venduti ('+fmtPct(x.sold/tot)+' del totale)'+(has?'\nIncasso '+eur0(x.c.net*x.sold)+' · margine '+eur0(x.c.mg*x.sold):'\nManca il prezzo di vendita')}}))
     +(D.length>show.length?'<p class="mut cnote">Mostrati i primi '+show.length+' piatti su '+D.length+'.</p>':'');
