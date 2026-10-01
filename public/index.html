@@ -266,6 +266,7 @@ details.tc summary::-webkit-details-marker{display:none}
 .rgh:first-child{margin-top:4px}
 .rlink{cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
 .rlink:hover{color:var(--acc);text-decoration-color:var(--acc)}
+.sn .rlink{font-weight:inherit}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .gh{color:var(--brand-soft)}}
 :root[data-theme="dark"] .gh{color:var(--brand-soft)}
 /* ---------- computer ---------- */
@@ -609,7 +610,7 @@ function recipesList(){
 }
 function recipeEditorHTML(){
   var r=route.recipe;
-  return'<div class="bar"><button data-act="backrecipe">← '+(route.from?{marginalita:'Marginalità',menu:'Menù Ingegnerizzato'}[route.from]:'Ricette')+'</button></div><div class="redit"><div class="rleft">'
+  return'<div class="bar"><button data-act="backrecipe">← '+(route.from?{marginalita:'Marginalità',menu:'Menù Ingegnerizzato',vendite:'Vendite'}[route.from]:'Ricette')+'</button></div><div class="redit"><div class="rleft">'
   +'<label>Nome piatto *<input value="'+esc(r.name)+'" oninput="route.recipe.name=this.value" placeholder="es. Calzone"></label>'
   +'<div class="grid2"><label>Tipologia<select onchange="route.recipe.type=this.value"><option value="">—</option>'+S.lists.tipologie.map(function(c){return'<option'+(r.type===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select></label>'
   +'<label>Dosi (porzioni della ricetta)<input type="number" inputmode="decimal" value="'+esc(r.portions)+'" oninput="route.recipe.portions=this.value;recalc()"></label></div>'
@@ -1124,7 +1125,7 @@ function venditeHTML(){
   h+=groups().map(function(g,gi){
     return'<h2 class="gh">'+esc(g.t)+' <span class="cnt" id="sg-'+gi+'"></span></h2><div class="card st"><div class="srow shead"><span>Piatto</span><span>Pezzi venduti</span><span>Prezzo</span><span>Incasso</span></div>'
       +g.rs.map(function(r){var q=((S.sales||{})[r.id]||{})[k]||'';var p=num(r.price);
-        return'<div class="srow"><span class="sn">'+esc(r.name)+(p>0?'':' <em class="mut">senza prezzo</em>')+'</span><input class="sin" type="number" inputmode="numeric" min="0" step="1" data-rid="'+r.id+'" value="'+esc(q)+'" oninput="setSale(this)" placeholder="0">'
+        return'<div class="srow"><span class="sn"><b class="rlink" data-act="openrecipe" data-id="'+r.id+'" title="Apri la ricetta">'+esc(r.name)+'</b>'+(p>0?'':' <em class="mut">senza prezzo</em>')+'</span><input class="sin" type="number" inputmode="numeric" min="0" step="1" data-rid="'+r.id+'" value="'+esc(q)+'" oninput="setSale(this)" placeholder="0">'
           +'<span class="sp">'+(p>0?eur(p):'—')+'</span><span class="si" id="si-'+r.id+'"></span></div>'}).join('')+'</div>';
   }).join('');
   return h;
@@ -1300,10 +1301,10 @@ function drawTrend(){
 }
 function trendPrevKey(k,g){if(g==='w')return wkAdd(k,-1);if(g==='y')return String(+k-1);if(g==='q'){var y=+k.slice(0,4),q=+k.slice(6);return q>1?y+'-T'+(q-1):(y-1)+'-T4'}return mAdd(k,-1)}
 
-function paintSales(){
+function paintSales(typing){
   var m=curSalesKey(),tq=0,ti=0,n=0;
   groups().forEach(function(g,gi){var gq=0;g.rs.forEach(function(r){var q=((S.sales||{})[r.id]||{})[m]||0,c=calcR(r),inc=c.net>0?c.net*q:0;gq+=q;tq+=q;ti+=inc;if(q)n++;setT('si-'+r.id,q&&c.net>0?eur(inc):'—')});setT('sg-'+gi,gq?gq.toLocaleString('it-IT')+' pezzi':'')});
-  later('trend',drawTrend,250);
+  if(typing)later('trend',drawTrend,250);else drawTrend();
   var W=isWk(m),ps=W?salesWeeks():salesMonths(),f=ps[0],l=ps[ps.length-1];
   setT('sv-np',ps.length);setT('sv-nr',!ps.length?(W?'nessuna':'nessuno'):W?'dalla '+(+f.slice(6))+'/'+f.slice(0,4)+' alla '+(+l.slice(6))+'/'+l.slice(0,4):mLabel(f)+' – '+mLabel(l));
   setT('sv-tq',tq.toLocaleString('it-IT'));setT('sv-tn',n+' piatti con vendite');setT('sv-ti',eur0(ti));
@@ -1311,7 +1312,7 @@ function paintSales(){
 function setSale(inp){
   var id=inp.dataset.rid,m=curSalesKey(),v=Math.max(0,num(inp.value));
   S.sales=S.sales||{};S.sales[id]=S.sales[id]||{};if(v)S.sales[id][m]=v;else delete S.sales[id][m];
-  SPEND[id]=v;applySales();paintSales();setT('svstat','Modifiche da salvare…');
+  SPEND[id]=v;applySales();paintSales(true);setT('svstat','Modifiche da salvare…');
   later('sales',flushSales,700);
 }
 function flushSales(){
@@ -1567,7 +1568,7 @@ document.addEventListener('click',function(e){
   else if(a==='newrecipe'){var lr=lockRecipe();if(lr){showLock(lr);return}route.recipe={id:uid(),isNew:true,name:'',type:'',portions:1,yieldG:'',price:'',rows:[{foodId:'',subId:'',name:'',qty:'',waste:''}]};render();window.scrollTo(0,0)}
   else if(a==='editrecipe'){route.recipe=clone(recipeById(id));render();window.scrollTo(0,0)}
   else if(a==='backrecipe'){closeRecipe();render()}
-  else if(a==='openrecipe'){var rr=recipeById(id);if(!rr)return;route.from=route.tab;route.fromY=window.scrollY;route.tab='ricette';route.q='';route.cat='';route.recipe=clone(rr);render();window.scrollTo(0,0)}
+  else if(a==='openrecipe'){var rr=recipeById(id);if(!rr)return;if(route.tab==='vendite')flushSales();route.from=route.tab;route.fromY=window.scrollY;route.tab='ricette';route.q='';route.cat='';route.recipe=clone(rr);render();window.scrollTo(0,0)}
   else if(a==='addrow'){route.recipe.rows.push({foodId:'',subId:'',name:'',qty:'',waste:''});render();
     var inp=document.querySelectorAll('.ing .top input');if(inp.length)inp[inp.length-1].focus()}
   else if(a==='delrow'){route.recipe.rows.splice(+t.dataset.i,1);render()}
