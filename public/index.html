@@ -136,6 +136,7 @@ input:disabled,select:disabled,textarea:disabled{opacity:1;color:var(--ink);back
 .wbar span{position:absolute;top:0;bottom:0;width:35%;background:var(--acc);border-radius:3px;animation:wslide 1.2s ease-in-out infinite}
 @keyframes wslide{0%{left:-35%}100%{left:100%}}
 @media (prefers-reduced-motion:reduce){.wbar span{animation:none;width:100%;opacity:.6}}
+.mergesum{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
 .chk{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);margin:6px 0}
 .chk input{width:auto;min-height:0}
 .tmp{background:rgba(183,121,31,.14);border:1px solid var(--warn);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:14px}
@@ -1537,15 +1538,32 @@ function datiHTML(){
     h+='<h2 class="gh">SOLO SUPER ADMIN</h2>'+box('tipiAttivita','Tipi di attività (elenco comune a tutti i clienti)','Nuovo tipo di attività','deltipo')
     +'<div class="card"><b>Backup ed esportazione</b><p class="mut" style="margin:4px 0 8px">Scarica i dati di questo cliente o di tutti i clienti in un file. I clienti non vedono questa sezione.</p>'
     +'<div class="acts" style="margin-top:0"><button class="pri" data-act="export">Esporta questo cliente</button><button data-act="exportall">Esporta tutti i clienti</button></div></div>'
-    +'<div class="card"><b>Importa backup in questo cliente</b><p class="mut" style="margin:4px 0 8px">Scegli un file di backup (anche quelli della vecchia versione) oppure incollane il contenuto. Attenzione: sostituisce alimenti, ricette ed elenchi di questo cliente.</p>'
+    +'<div class="card"><b>Importa ricette e alimenti in questo cliente</b><p class="mut" style="margin:4px 0 8px">Scegli un file (anche i backup della vecchia versione) oppure incollane il contenuto.</p>'
+    +'<label class="rad"><input type="radio" name="bkmode" value="merge"'+(route.bkmode!=='replace'?' checked':'')+' onchange="route.bkmode=this.value"><span><b>Aggiorna</b> (consigliato)<br><span class="mut">Aggiorna ingredienti, dosi e prezzi d’acquisto delle ricette con lo stesso nome e aggiunge quelle nuove. Restano vendite, prezzi di vendita, flag e note. Non cancella niente: prima vedi il riepilogo delle differenze.</span></span></label>'
+    +'<label class="rad"><input type="radio" name="bkmode" value="replace"'+(route.bkmode==='replace'?' checked':'')+' onchange="route.bkmode=this.value"><span><b>Sostituisci tutto</b><br><span class="mut">Cancella alimenti, ricette ed elenchi del cliente e li ricrea dal file. <b class="bad">Si perdono anche le vendite</b> e i prezzi di vendita inseriti nell’app. Solo per un cliente nuovo.</span></span></label>'
     +'<input type="file" id="bkfile" accept=".json,application/json" onchange="readBk(this)" style="margin-bottom:8px">'
     +'<textarea id="bk" placeholder="Contenuto del backup"></textarea>'
-    +'<div class="acts"><button data-act="import">Importa</button></div><p id="bkmsg" class="mut"></p></div>'
+    +'<div class="acts"><button data-act="import">Importa</button></div><p id="bkmsg" class="mut"></p><div id="bksum"></div></div>'
     +'<div class="card"><b>Dati di test</b><p class="mut" style="margin:4px 0 8px">25 alimenti e 8 ricette dal tuo Excel (compresa la PALLINA usata nella MARGHERITA). Prezzi di vendita, venduto e tempi sono valori di prova. Sostituisce tutti i dati di questo cliente.</p><button data-act="reseed">Carica dati di test</button></div>';
   }
   return h+'<p class="soon">In arrivo: Matrice.</p>';
 }
-function readBk(inp){var f=inp.files&&inp.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(){document.getElementById('bk').value=rd.result;msg('File caricato: premi Importa.')};rd.readAsText(f)}
+/* riepilogo dell'aggiornamento (prima = anteprima con Conferma, dopo = cosa è stato fatto) */
+function mergeSumHTML(m,preview){
+  var f=function(n){return n.toLocaleString('it-IT')},lst=function(a,max){max=max||60;return'<div class="dm-l">'+a.slice(0,max).map(function(x){return'<span class="dm-c">'+esc(x)+'</span>'}).join('')+(a.length>max?'<span class="mut">… e altri '+(a.length-max)+'</span>':'')+'</div>'};
+  var sec=function(t,a,open,body){return a.length?'<details class="ig"'+(open?' open':'')+'><summary>'+t+'<span>'+f(a.length)+'</span></summary><div style="padding-bottom:10px">'+(body||lst(a))+'</div></details>':''};
+  var pr='<div class="dm-l">'+m.foodsPrice.slice(0,80).map(function(x){return'<span class="dm-c">'+esc(x.name)+' <em>'+(x.from!=null?eur(x.from)+' → ':'')+eur(x.to)+'</em></span>'}).join('')+(m.foodsPrice.length>80?'<span class="mut">… e altri '+(m.foodsPrice.length-80)+'</span>':'')+'</div>';
+  var nothing=!m.recipesChanged.length&&!m.recipesNew.length&&!m.foodsNew.length&&!m.foodsPrice.length;
+  return'<div class="mergesum"><h3 class="ch">'+(preview?'Cosa cambia con questo file':'Aggiornamento fatto ✓')+'</h3>'
+    +(nothing?'<p class="ok">Nessuna differenza: i dati dell’app sono già uguali al file.</p>':'')
+    +sec('Ricette con ingredienti o dosi diversi',m.recipesChanged,true)+sec('Ricette nuove',m.recipesNew,true)
+    +sec('Alimenti con prezzo d’acquisto nuovo',m.foodsPrice,false,pr)+sec('Alimenti nuovi',m.foodsNew,false)
+    +sec('Ricette nell’app ma non nel file (restano come sono)',m.recipesNotInFile,false)
+    +(m.recipesDupInApp.length?'<p class="warn" style="font-size:13px">Nell’app ci sono ricette con lo stesso nome ('+esc(m.recipesDupInApp.join(', '))+'): viene aggiornata solo la prima.</p>':'')
+    +'<p class="mut" style="font-size:13px">'+f(m.recipesSame)+' ricette e '+f(m.foodsSame)+' alimenti uguali. Vendite, prezzi di vendita, “conta nella media” e note restano quelli dell’app.</p>'
+    +(preview&&!nothing?'<div class="acts"><button class="pri" data-act="importgo">Conferma aggiornamento</button><button data-act="importno">Annulla</button></div>':'')+'</div>';
+}
+function readBk(inp){var f=inp.files&&inp.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(){document.getElementById('bk').value=rd.result;route.bkdata=null;var bs=document.getElementById('bksum');if(bs)bs.innerHTML='';msg('File caricato: premi Importa.')};rd.readAsText(f)}
 function download(name,obj){
   var b=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'}),a=document.createElement('a');
   a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500);
@@ -1795,9 +1813,20 @@ document.addEventListener('click',function(e){
   else if(a==='deltipo'){busy(t,api('DELETE','/admin/lists',{value:S.lists.tipiAttivita[+t.dataset.i]})).then(reload).catch(showErr)}
   else if(a==='export'){busy(t,api('GET','/admin/export?tenant='+CUR)).then(function(d){download('foodcost-'+slug(S.tenant.ragione)+'-'+today()+'.json',d)}).catch(showErr)}
   else if(a==='exportall'){busy(t,api('GET','/admin/export')).then(function(d){download('foodcost-tutti-i-clienti-'+today()+'.json',d)}).catch(showErr)}
+  else if(a==='import'&&route.bkmode!=='replace'){
+    var om;try{om=JSON.parse(val('bk'));if(!om.foods||!om.recipes)throw 0}catch(x){msg('File non valido.');return}
+    route.bkdata=om;msg('');
+    busy(t,working('Controllo delle differenze…',api('POST','/admin/import',{tenant:CUR,data:om,mode:'merge',dryRun:true}))).then(function(d){document.getElementById('bksum').innerHTML=mergeSumHTML(d.summary,true)}).catch(function(x){msg(x.message)});
+  }
+  else if(a==='importgo'){
+    if(!route.bkdata)return;
+    busy(t,working('Aggiornamento in corso…',api('POST','/admin/import',{tenant:CUR,data:route.bkdata,mode:'merge'}).then(function(d){route.bkdata=null;return reload().then(function(){return d})}))).then(function(d){
+      toast('Aggiornamento completato.');var el=document.getElementById('bksum');if(el)el.innerHTML=mergeSumHTML(d.summary,false)}).catch(function(x){msg(x.message)});
+  }
+  else if(a==='importno'){route.bkdata=null;document.getElementById('bksum').innerHTML='';msg('Aggiornamento annullato: nessuna modifica.')}
   else if(a==='import'){
     var o;try{o=JSON.parse(val('bk'));if(!o.foods||!o.recipes)throw 0}catch(x){msg('Backup non valido.');return}
-    if(armed(t,'Tocca ancora: sostituisce i dati di '+S.tenant.ragione))busy(t,working('Importazione dei dati in corso…',api('POST','/admin/import',{tenant:CUR,data:o}).then(reload))).then(function(){toast('Dati importati.');msg('Importazione completata ✓')}).catch(function(x){msg(x.message)});
+    if(armed(t,'Tocca ancora: cancella e sostituisce tutto (anche le vendite) di '+S.tenant.ragione))busy(t,working('Importazione dei dati in corso…',api('POST','/admin/import',{tenant:CUR,data:o}).then(reload))).then(function(){toast('Dati importati.');msg('Importazione completata ✓')}).catch(function(x){msg(x.message)});
   }
   else if(a==='reseed'){if(armed(t,'Tocca ancora per sostituire tutto'))busy(t,api('POST','/admin/seed',{tenant:CUR})).then(reload).then(function(){toast('Dati di test caricati.')}).catch(showErr)}
 });

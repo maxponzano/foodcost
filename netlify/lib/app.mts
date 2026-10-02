@@ -667,6 +667,144 @@ async function importInto(c: Queryable, tid: string, d: any) {
   }
 }
 
+class DryRun extends Error {}
+/* Importazione "Aggiorna": le ricette e gli alimenti esistenti (stesso nome) restano vivi, con vendite,
+   prezzo di vendita, flag e note; si aggiornano ingredienti, dosi, porzioni e prezzi d'acquisto (nello storico).
+   Niente viene cancellato: le ricette che non sono nel file vengono solo elencate. */
+async function mergeInto(c: Queryable, tid: string, d: any) {
+  if (!d || !Array.isArray(d.foods) || !Array.isArray(d.recipes)) throw bad("Backup non valido.");
+  const low = (x: unknown) => str(x, 150).toLowerCase();
+  const exF = new Map<string, any>();
+  for (const f of (await c.query(`SELECT id,name,category,supplier,unit,pack_qty,pack_unit FROM foods WHERE tenant_id=$1`, [tid])).rows) exF.set(f.name.toLowerCase(), f);
+  const lastP = new Map<string, { date: string; price: number }>(), allP = new Map<string, Map<string, number>>();
+  for (const p of (await c.query(`SELECT p.food_id, to_char(p.date,'YYYY-MM-DD') AS d, p.price FROM food_prices p JOIN foods f ON f.id=p.food_id WHERE f.tenant_id=$1 ORDER BY p.date, p.id`, [tid])).rows) {
+    lastP.set(p.food_id, { date: p.d, price: Number(p.price) });
+    (allP.get(p.food_id) || allP.set(p.food_id, new Map()).get(p.food_id)!).set(p.d, Number(p.price));
+  }
+  // ---- alimenti
+  const fmap = new Map<string, string>(), seen = new Set<string>(), fname = new Map<string, string>();
+  const NF = { id: [] as string[], name: [] as string[], cat: [] as string[], sup: [] as string[], unit: [] as string[], pq: [] as (number | null)[], pu: [] as string[], mode: [] as string[] };
+  const UF = { id: [] as string[], cat: [] as string[], sup: [] as string[], unit: [] as string[], pq: [] as (number | null)[], pu: [] as string[] };
+  const P = { food: [] as string[], date: [] as string[], price: [] as number[] };
+  const sum: any = { foodsNew: [], foodsPrice: [], foodsSame: 0, recipesNew: [], recipesChanged: [], recipesSame: 0, recipesNotInFile: [], recipesDupInApp: [] };
+  for (const f of d.foods.slice(0, 20000)) {
+    const name = str(f?.name, 150), key = name.toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const unit = ["kg", "lt", "pz", "conf"].includes(f.unit) ? f.unit : "kg", pu = ["g", "ml", "pz"].includes(f.packUnit) ? f.packUnit : "g", pq = numOrNull(f.packQty, 0, 1e7);
+    const ex = exF.get(key);
+    let id: string;
+    if (ex) {
+      id = ex.id;
+      UF.id.push(id); UF.cat.push(ex.category || str(f.category, 100)); UF.sup.push(str(f.supplier, 150) || ex.supplier); UF.unit.push(unit); UF.pq.push(pq); UF.pu.push(pu);
+    } else {
+      id = randomUUID();
+      NF.id.push(id); NF.name.push(name); NF.cat.push(str(f.category, 100)); NF.sup.push(str(f.supplier, 150)); NF.unit.push(unit); NF.pq.push(pq); NF.pu.push(pu);
+      NF.mode.push(["min", "avg", "max", "last"].includes(f.mode) ? f.mode : "max");
+      sum.foodsNew.push(name);
+    }
+    fmap.set(String(f.id), id); fname.set(id, name);
+    const have = allP.get(id) || new Map<string, number>();
+    let newest: { date: string; price: number } | null = null;
+    for (const h of (Array.isArray(f.history) ? f.history.slice(0, 1000) : [])) {
+      const pr = numOrNull(h?.price, 0, 1e6), dt = /^\d{4}-\d{2}-\d{2}$/.test(String(h?.date)) ? h.date : null;
+      if (!(pr && pr > 0 && dt)) continue;
+      if (!newest || dt >= newest.date) newest = { date: dt, price: pr };
+      if (have.get(dt) === pr) continue;           // già nello storico
+      P.food.push(id); P.date.push(dt); P.price.push(pr);
+    }
+    if (ex) {
+      const old = lastP.get(id);
+      if (newest && (!old || (newest.date >= old.date && Math.abs(newest.price - old.price) > 1e-9)))
+        sum.foodsPrice.push({ name, from: old ? old.price : null, to: newest.price, date: newest.date });
+      else sum.foodsSame++;
+    }
+  }
+  if (NF.id.length) await c.query(
+    `INSERT INTO foods(id,tenant_id,name,category,supplier,unit,pack_qty,pack_unit,price_mode)
+     SELECT u.id,$1,u.n,u.c,u.s,u.un,u.pq,u.pu,u.m FROM unnest($2::uuid[],$3::text[],$4::text[],$5::text[],$6::text[],$7::numeric[],$8::text[],$9::text[]) AS u(id,n,c,s,un,pq,pu,m)`,
+    [tid, NF.id, NF.name, NF.cat, NF.sup, NF.unit, NF.pq, NF.pu, NF.mode]);
+  if (UF.id.length) await c.query(
+    `UPDATE foods f SET category=u.c, supplier=u.s, unit=u.un, pack_qty=u.pq, pack_unit=u.pu
+     FROM unnest($2::uuid[],$3::text[],$4::text[],$5::text[],$6::numeric[],$7::text[]) AS u(id,c,s,un,pq,pu) WHERE f.id=u.id AND f.tenant_id=$1`,
+    [tid, UF.id, UF.cat, UF.sup, UF.unit, UF.pq, UF.pu]);
+  if (P.food.length) {
+    // stesso alimento e stessa data: il prezzo del file sostituisce quello vecchio
+    await c.query(`DELETE FROM food_prices p USING unnest($1::uuid[],$2::date[]) AS u(f,d) WHERE p.food_id=u.f AND p.date=u.d`, [P.food, P.date]);
+    await c.query(`INSERT INTO food_prices(food_id,date,price) SELECT * FROM unnest($1::uuid[],$2::date[],$3::numeric[])`, [P.food, P.date, P.price]);
+  }
+  // ---- elenchi: si aggiungono le voci mancanti, non si toglie niente
+  const lists = d.lists || {}, LK: string[] = [], LV: string[] = [];
+  for (const k of LIST_KINDS) for (const v of (Array.isArray(lists[k]) ? lists[k] : [])) if (str(v)) { LK.push(k); LV.push(str(v, 100)); }
+  for (const sp of NF.sup.concat(UF.sup)) if (sp) { LK.push("fornitori"); LV.push(sp); }
+  if (LK.length) await c.query(`INSERT INTO lists(tenant_id,kind,value) SELECT $1,k,v FROM unnest($2::text[],$3::text[]) AS u(k,v) ON CONFLICT DO NOTHING`, [tid, LK, LV]);
+  // ---- ricette
+  const exR = new Map<string, any>(), dupApp = new Set<string>();
+  for (const r of (await c.query(`SELECT id,name,type,portions,yield_g,price,check_note FROM recipes WHERE tenant_id=$1 ORDER BY created_at, id`, [tid])).rows) {
+    const k = r.name.toLowerCase(); if (exR.has(k)) dupApp.add(r.name); else exR.set(k, r);
+  }
+  const exRows = new Map<string, string>();
+  for (const x of (await c.query(`SELECT rr.recipe_id, rr.food_id, rr.sub_recipe_id, rr.label, rr.qty, rr.waste_pct FROM recipe_rows rr JOIN recipes r ON r.id=rr.recipe_id WHERE r.tenant_id=$1 ORDER BY rr.recipe_id, rr.position`, [tid])).rows)
+    exRows.set(x.recipe_id, (exRows.get(x.recipe_id) || "") + "|" + [x.food_id || "", x.sub_recipe_id || "", x.label.toLowerCase(), N(x.qty), N(x.waste_pct)].join(";"));
+  const recs = d.recipes.slice(0, 20000).filter((r: any) => str(r?.name)), rmap = new Map<string, string>(), inFile = new Set<string>();
+  const NR = { id: [] as string[], name: [] as string[], type: [] as string[], por: [] as number[], yg: [] as (number | null)[], price: [] as (number | null)[], sold: [] as (number | null)[], time: [] as (number | null)[], avg: [] as boolean[], note: [] as string[] };
+  const UR = { id: [] as string[], type: [] as string[], por: [] as number[], yg: [] as (number | null)[], price: [] as (number | null)[], note: [] as string[] };
+  for (const r of recs) {
+    const k = low(r.name); if (inFile.has(k)) continue; inFile.add(k);
+    const ex = exR.get(k); rmap.set(String(r.id), ex ? ex.id : randomUUID());
+  }
+  // archi tra ricette già presenti e non riscritte (per evitare cicli)
+  const edges = new Map<string, Set<string>>();
+  const rewritten = new Set(recs.map((r: any) => rmap.get(String(r.id))).filter(Boolean));
+  for (const x of (await c.query(`SELECT rr.recipe_id, rr.sub_recipe_id FROM recipe_rows rr JOIN recipes r ON r.id=rr.recipe_id WHERE r.tenant_id=$1 AND rr.sub_recipe_id IS NOT NULL`, [tid])).rows)
+    if (!rewritten.has(x.recipe_id)) (edges.get(x.recipe_id) || edges.set(x.recipe_id, new Set()).get(x.recipe_id)!).add(x.sub_recipe_id);
+  const reach = (from: string, to: string, vis = new Set<string>()): boolean => from === to || (!vis.has(from) && (vis.add(from), [...(edges.get(from) || [])].some((n) => reach(n, to, vis))));
+  const W = { rec: [] as string[], food: [] as (string | null)[], sub: [] as (string | null)[], label: [] as string[], qty: [] as (number | null)[], waste: [] as (number | null)[], pos: [] as number[] };
+  const done = new Set<string>();
+  for (const r of recs) {
+    const id = rmap.get(String(r.id))!; if (done.has(id)) continue; done.add(id);
+    const ex = exR.get(low(r.name));
+    let sig = "", pos = 0;
+    for (const x of (Array.isArray(r.rows) ? r.rows : []).slice(0, 300)) {
+      if (!x || !(x.foodId || x.subId || str(x.name))) continue;
+      let sub = rmap.get(String(x.subId)) || null;
+      if (sub) { if (reach(sub, id)) sub = null; else (edges.get(id) || edges.set(id, new Set()).get(id)!).add(sub); }
+      const food = sub ? null : fmap.get(String(x.foodId)) || null, qty = numOrNull(x.qty, 0, 1e7), waste = numOrNull(x.waste, 0, 99.9), label = str(x.name, 150);
+      W.rec.push(id); W.food.push(food); W.sub.push(sub); W.label.push(label); W.qty.push(qty); W.waste.push(waste); W.pos.push(pos++);
+      sig += "|" + [food || "", sub || "", label.toLowerCase(), qty ?? "", waste ?? ""].join(";");
+    }
+    const por = numOrNull(r.portions, 0, 1e5) || 1, yg = numOrNull(r.yieldG, 0, 1e8), price = numOrNull(r.price, 0, 1e6);
+    if (ex) {
+      UR.id.push(id); UR.type.push(ex.type || str(r.type, 100)); UR.por.push(por); UR.yg.push(yg);
+      UR.price.push(ex.price != null ? Number(ex.price) : price);           // vince il prezzo di vendita dell'app
+      UR.note.push(ex.check_note || str(r.checkNote, 500));
+      const same = (exRows.get(id) || "") === sig && Number(ex.portions) === por && (ex.yield_g == null ? null : Number(ex.yield_g)) === yg;
+      if (same) sum.recipesSame++; else sum.recipesChanged.push(str(r.name, 150));
+    } else {
+      NR.id.push(id); NR.name.push(str(r.name, 150)); NR.type.push(str(r.type, 100)); NR.por.push(por); NR.yg.push(yg); NR.price.push(price);
+      NR.sold.push(numOrNull(r.sold, 0, 1e9)); NR.time.push(numOrNull(r.time, 0, 1e5)); NR.avg.push(r.inAvg !== false); NR.note.push(str(r.checkNote, 500));
+      sum.recipesNew.push(str(r.name, 150));
+    }
+  }
+  if (NR.id.length) await c.query(
+    `INSERT INTO recipes(id,tenant_id,name,type,portions,yield_g,price,sold,prep_time,in_avg,check_note)
+     SELECT u.id,$1,u.n,u.t,u.p,u.y,u.pr,u.s,u.tm,u.a,u.no FROM unnest($2::uuid[],$3::text[],$4::text[],$5::numeric[],$6::numeric[],$7::numeric[],$8::numeric[],$9::numeric[],$10::boolean[],$11::text[]) AS u(id,n,t,p,y,pr,s,tm,a,no)`,
+    [tid, NR.id, NR.name, NR.type, NR.por, NR.yg, NR.price, NR.sold, NR.time, NR.avg, NR.note]);
+  if (UR.id.length) {
+    await c.query(
+      `UPDATE recipes r SET type=u.t, portions=u.p, yield_g=u.y, price=u.pr, check_note=u.no
+       FROM unnest($2::uuid[],$3::text[],$4::numeric[],$5::numeric[],$6::numeric[],$7::text[]) AS u(id,t,p,y,pr,no) WHERE r.id=u.id AND r.tenant_id=$1`,
+      [tid, UR.id, UR.type, UR.por, UR.yg, UR.price, UR.note]);
+    await c.query(`DELETE FROM recipe_rows WHERE recipe_id = ANY($1::uuid[])`, [UR.id]);
+  }
+  if (W.rec.length) await c.query(
+    `INSERT INTO recipe_rows(recipe_id,food_id,sub_recipe_id,label,qty,waste_pct,position) SELECT * FROM unnest($1::uuid[],$2::uuid[],$3::uuid[],$4::text[],$5::numeric[],$6::numeric[],$7::int[])`,
+    [W.rec, W.food, W.sub, W.label, W.qty, W.waste, W.pos]);
+  for (const [k, r] of exR) if (!inFile.has(k)) sum.recipesNotInFile.push(r.name);
+  sum.recipesDupInApp = [...dupApp];
+  return sum;
+}
+
 /* =====================================================================
    Area super amministratore
    ===================================================================== */
@@ -850,6 +988,17 @@ async function admin(m: string, path: string, b: any, url: URL): Promise<Respons
   if (path === "/import" && m === "POST") {
     const tid = needUuid(b.tenant);
     if (!(await q(`SELECT 1 FROM tenants WHERE id=$1`, [tid])).length) throw notFound("Cliente non trovato.");
+    if (b.mode === "merge") {
+      // "Aggiorna": prima un giro di prova (annullato) per il riepilogo, poi quello vero
+      if (b.dryRun) {
+        let sum: any = null;
+        try { await tx(async (c) => { sum = await mergeInto(c, tid, b.data); throw new DryRun(); }); }
+        catch (e) { if (!(e instanceof DryRun)) throw e; }
+        return json({ ok: true, dryRun: true, summary: sum });
+      }
+      const sum = await tx((c) => mergeInto(c, tid, b.data));
+      return json({ ok: true, summary: sum });
+    }
     await tx((c) => importInto(c, tid, b.data));
     return json({ ok: true });
   }

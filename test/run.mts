@@ -378,6 +378,42 @@ section("Nota da verificare sulla ricetta");
   ok((await A.get("/data")).data.recipes.find((x: any) => x.id === rid).checkNote === "", "verificato: nota tolta");
 }
 
+section("Importazione in modalità Aggiorna");
+{
+  // cliente di prova con i dati demo e qualche vendita
+  const tid = (await max.post("/admin/tenants", { ragione: "Merge Test", tipo: "Pizzeria", demo: true })).data.id;
+  let d0 = (await max.get("/data", { tenant: tid })).data;
+  const marg = d0.recipes.find((x: any) => x.name === "MARGHERITA"), cla = d0.recipes.find((x: any) => x.name === "CLASSICA");
+  await max.put("/sales", { period: "2026-07", items: [{ recipeId: marg.id, qty: 300 }] }, { tenant: tid });
+  await max.patch("/recipes/" + marg.id, { price: 8.5, inAvg: false, checkNote: "nota mia" }, { tenant: tid });
+  const file: any = JSON.parse(JSON.stringify((await max.get("/admin/export?tenant=" + tid)).data));
+  delete file.sales;
+  const fm = file.recipes.find((x: any) => x.name === "MARGHERITA");
+  fm.price = 7; fm.rows.find((x: any) => !x.subId).qty = 150;                       // dose cambiata, prezzo diverso
+  file.recipes = file.recipes.filter((x: any) => x.name !== "CLASSICA");             // ricetta tolta dal file
+  file.recipes.push({ id: "nuova", name: "DIAVOLA", type: "PIZZE SEMPLICI", portions: 1, price: 8, rows: [{ foodId: file.foods[0].id, name: file.foods[0].name, qty: 50 }] });
+  file.foods.push({ id: "nf", name: "nduja", category: "Salumi", unit: "kg", history: [{ date: "2026-10-01", price: 22 }] });
+  file.foods.find((x: any) => x.name === "pomodoro").history.push({ date: "2026-10-01", price: 1.6 });
+  r = await max.post("/admin/import", { tenant: tid, data: file, mode: "merge", dryRun: true });
+  const sm = r.data.summary;
+  ok(r.status === 200 && sm.recipesChanged.includes("MARGHERITA") && sm.recipesNew.includes("DIAVOLA") && sm.recipesNotInFile.includes("CLASSICA"), "prova: riepilogo ricette (cambiate, nuove, non nel file)");
+  ok(sm.foodsNew.includes("nduja") && sm.foodsPrice.some((x: any) => x.name === "pomodoro" && x.to === 1.6), "prova: alimenti nuovi e prezzi cambiati");
+  ok(sm.recipesSame === 6, "prova: le altre ricette risultano uguali (" + sm.recipesSame + ")");
+  ok((await max.get("/data", { tenant: tid })).data.recipes.length === 8, "la prova non cambia niente");
+  r = await max.post("/admin/import", { tenant: tid, data: file, mode: "merge" });
+  const d1 = (await max.get("/data", { tenant: tid })).data, m1 = d1.recipes.find((x: any) => x.name === "MARGHERITA");
+  ok(r.status === 200 && m1.id === marg.id && d1.sales[marg.id]["2026-07"] === 300, "la ricetta aggiornata resta la stessa: vendite conservate");
+  ok(m1.price === 8.5 && m1.inAvg === false && m1.checkNote === "nota mia", "prezzo di vendita, flag e nota dell'app restano");
+  ok(m1.rows.find((x: any) => !x.subId).qty === 150 && m1.rows[0].subId, "ingredienti aggiornati, sotto-ricetta ancora collegata");
+  ok(d1.recipes.some((x: any) => x.id === cla.id) && d1.recipes.some((x: any) => x.name === "DIAVOLA") && d1.recipes.length === 9, "la ricetta non nel file resta, quella nuova si aggiunge");
+  const pom = d1.foods.find((x: any) => x.name === "pomodoro");
+  ok(pom.history.length === 2 && pom.history[1].price === 1.6 && d1.foods.some((x: any) => x.name === "nduja"), "nuovo prezzo aggiunto allo storico, nuovo alimento aggiunto");
+  r = await max.post("/admin/import", { tenant: tid, data: file, mode: "merge", dryRun: true });
+  ok(r.data.summary.recipesChanged.length === 0 && r.data.summary.foodsPrice.length === 0 && r.data.summary.foodsNew.length === 0, "rifacendo lo stesso aggiornamento non cambia più niente");
+  ok((await A.post("/admin/import", { tenant: tid, data: file, mode: "merge" })).status === 403, "solo il super admin aggiorna");
+  await max.del("/admin/tenants/" + tid);
+}
+
 section("Persona autorizzata aggiunta a un cliente esistente");
 {
   ok((await A.post("/admin/tenants/" + tB.id + "/admins", { name: "X", email: "x@x.it" })).status === 403, "solo il super admin aggiunge persone");
