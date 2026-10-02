@@ -129,6 +129,13 @@ input:disabled,select:disabled,textarea:disabled{opacity:1;color:var(--ink);back
 .card.item.tocheck{border-left:4px solid var(--warn)}
 .chknote{display:block;color:var(--warn);font-size:12px;font-weight:600;margin-top:2px}
 .chkbox{display:flex;justify-content:space-between;align-items:center;gap:10px;background:color-mix(in srgb,var(--warn) 14%,transparent);border:1px solid var(--warn);border-radius:10px;padding:10px 12px;margin:0 0 12px;font-size:14px}.chkbox b{color:var(--warn)}
+#work{position:fixed;inset:0;z-index:200;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;padding:16px}
+#work .wbox{background:var(--bg);border-radius:14px;padding:20px 22px;max-width:380px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+#work .wbox b{font-family:var(--f-head);font-size:16px}#work .wbox p{margin:10px 0 0;font-size:13px}
+.wbar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:14px;position:relative}
+.wbar span{position:absolute;top:0;bottom:0;width:35%;background:var(--acc);border-radius:3px;animation:wslide 1.2s ease-in-out infinite}
+@keyframes wslide{0%{left:-35%}100%{left:100%}}
+@media (prefers-reduced-motion:reduce){.wbar span{animation:none;width:100%;opacity:.6}}
 .chk{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);margin:6px 0}
 .chk input{width:auto;min-height:0}
 .tmp{background:rgba(183,121,31,.14);border:1px solid var(--warn);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:14px}
@@ -1547,6 +1554,13 @@ function pwSheetHTML(){
   +'<div class="acts"><button class="pri" type="submit">Salva</button>'+(f?'<button type="button" data-act="logout">Esci</button>':'<button type="button" data-act="pwclose">Annulla</button>')+'</div></form></div>';
 }
 function val(id){var e=document.getElementById(id);return e?e.value:''}
+/* riquadro "operazione in corso" per le operazioni lunghe (importazioni) */
+function working(msg,p){
+  var el=document.getElementById('work');if(!el){el=document.createElement('div');el.id='work';document.body.appendChild(el)}
+  el.innerHTML='<div class="wbox" role="status" aria-live="polite"><b>'+esc(msg)+'</b><div class="wbar"><span></span></div><p class="mut">Attendi senza chiudere la pagina: può richiedere qualche secondo.</p></div>';
+  el.style.display='flex';var hide=function(){el.style.display='none'};
+  return p.then(function(x){hide();return x},function(e){hide();throw e});
+}
 function busy(btn,p){if(btn)btn.disabled=true;return p.then(function(x){if(btn)btn.disabled=false;return x},function(e){if(btn)btn.disabled=false;throw e})}
 document.addEventListener('submit',function(e){
   var f=e.target.closest('[data-form]');if(!f)return;e.preventDefault();
@@ -1623,7 +1637,7 @@ document.addEventListener('click',function(e){
   else if(a==='impclose'){route.imp=null;render()}
   else if(a==='impgo'){
     var I=route.imp;if(!I)return;
-    busy(t,api('POST','/sales/import',{period:I.week,rows:I.items.map(function(x){return{name:x.name,recipeId:isRec(x.rid)?x.rid:null,qty:x.qty,ignore:x.rid==='-'&&(x.st==='saved'||x.st==='manual')}})})).then(function(d){
+    busy(t,working('Importazione delle vendite in corso…',api('POST','/sales/import',{period:I.week,rows:I.items.map(function(x){return{name:x.name,recipeId:isRec(x.rid)?x.rid:null,qty:x.qty,ignore:x.rid==='-'&&(x.st==='saved'||x.st==='manual')}})}))).then(function(d){
       route.imp=null;if(isWk(I.week))route.sw=I.week;else route.sm=I.week;route.tr=null;return loadData().then(function(){render();toast('Importati '+num(d.qty).toLocaleString('it-IT')+' pezzi su '+d.recipes+' piatti: '+impPerLabel(I.week)+'.')});
     }).catch(showErr)}
   else if(a==='sresetgo'){
@@ -1686,7 +1700,7 @@ document.addEventListener('click',function(e){
   else if(a==='exportall'){busy(t,api('GET','/admin/export')).then(function(d){download('foodcost-tutti-i-clienti-'+today()+'.json',d)}).catch(showErr)}
   else if(a==='import'){
     var o;try{o=JSON.parse(val('bk'));if(!o.foods||!o.recipes)throw 0}catch(x){msg('Backup non valido.');return}
-    if(armed(t,'Tocca ancora: sostituisce i dati di '+S.tenant.ragione))busy(t,api('POST','/admin/import',{tenant:CUR,data:o})).then(reload).then(function(){toast('Dati importati.')}).catch(function(x){msg(x.message)});
+    if(armed(t,'Tocca ancora: sostituisce i dati di '+S.tenant.ragione))busy(t,working('Importazione dei dati in corso…',api('POST','/admin/import',{tenant:CUR,data:o}).then(reload))).then(function(){toast('Dati importati.');msg('Importazione completata ✓')}).catch(function(x){msg(x.message)});
   }
   else if(a==='reseed'){if(armed(t,'Tocca ancora per sostituire tutto'))busy(t,api('POST','/admin/seed',{tenant:CUR})).then(reload).then(function(){toast('Dati di test caricati.')}).catch(showErr)}
 });

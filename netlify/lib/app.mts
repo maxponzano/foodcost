@@ -567,57 +567,103 @@ async function tenantData(tid: string, s: Scope | null) {
    Importazione (backup dell'app, anche quelli vecchi del localStorage)
    ===================================================================== */
 async function importInto(c: Queryable, tid: string, d: any) {
+  // scritture raggruppate (poche query anche con centinaia di alimenti e ricette): online ogni query costa tempo
   if (!d || !Array.isArray(d.foods) || !Array.isArray(d.recipes)) throw bad("Backup non valido.");
   await c.query(`DELETE FROM recipes WHERE tenant_id=$1`, [tid]);
   await c.query(`DELETE FROM foods WHERE tenant_id=$1`, [tid]);
   await c.query(`DELETE FROM lists WHERE tenant_id=$1`, [tid]);
-  const lists = d.lists || {};
-  for (const k of LIST_KINDS) {
-    const arr: string[] = Array.isArray(lists[k]) ? lists[k] : (DEFAULT_LISTS as any)[k] || [];
-    for (const v of arr) if (str(v)) await c.query(`INSERT INTO lists(tenant_id,kind,value) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [tid, k, str(v, 100)]);
-  }
   const t = d.tenant || {};
   await c.query(`UPDATE tenants SET iva=$2, fc_target=$3, ragione_sociale=COALESCE(NULLIF($4,''),ragione_sociale), tipo_attivita=COALESCE(NULLIF($5,''),tipo_attivita) WHERE id=$1`,
     [tid, numOrNull(d.iva, 0, 100) ?? 10, numOrNull(d.fcTarget, 1, 100) ?? 30, str(t.ragione, 200), str(t.tipo, 100)]);
 
-  const fmap = new Map<string, string>();
-  const seen = new Set<string>();
-  for (const f of d.foods) {
-    const key = str(f?.name, 150).toLowerCase();
+  // alimenti e storico prezzi
+  const F = { id: [] as string[], name: [] as string[], cat: [] as string[], sup: [] as string[], unit: [] as string[], pq: [] as (number | null)[], pu: [] as string[], mode: [] as string[] };
+  const P = { food: [] as string[], date: [] as string[], price: [] as number[] };
+  const fmap = new Map<string, string>(), seen = new Set<string>();
+  for (const f of d.foods.slice(0, 20000)) {
+    const name = str(f?.name, 150), key = name.toLowerCase();
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    fmap.set(String(f.id), await saveFood(c, tid, null, f));
+    const id = randomUUID();
+    fmap.set(String(f.id), id);
+    F.id.push(id); F.name.push(name); F.cat.push(str(f.category, 100)); F.sup.push(str(f.supplier, 150));
+    F.unit.push(["kg", "lt", "pz", "conf"].includes(f.unit) ? f.unit : "kg"); F.pq.push(numOrNull(f.packQty, 0, 1e7));
+    F.pu.push(["g", "ml", "pz"].includes(f.packUnit) ? f.packUnit : "g"); F.mode.push(["min", "avg", "max", "last"].includes(f.mode) ? f.mode : "max");
+    for (const h of (Array.isArray(f.history) ? f.history.slice(0, 1000) : [])) {
+      const pr = numOrNull(h?.price, 0, 1e6), dt = /^\d{4}-\d{2}-\d{2}$/.test(String(h?.date)) ? h.date : null;
+      if (pr && pr > 0 && dt) { P.food.push(id); P.date.push(dt); P.price.push(pr); }
+    }
   }
-  // prima creo tutte le ricette senza righe, poi inserisco le righe con gli id nuovi
-  const rmap = new Map<string, string>();
-  for (const r of d.recipes) {
-    if (!str(r?.name)) continue;
-    rmap.set(String(r.id), await saveRecipe(c, tid, null, { ...r, rows: [] }));
+  if (F.id.length) await c.query(
+    `INSERT INTO foods(id,tenant_id,name,category,supplier,unit,pack_qty,pack_unit,price_mode)
+     SELECT u.id,$1,u.n,u.c,u.s,u.un,u.pq,u.pu,u.m FROM unnest($2::uuid[],$3::text[],$4::text[],$5::text[],$6::text[],$7::numeric[],$8::text[],$9::text[]) AS u(id,n,c,s,un,pq,pu,m)`,
+    [tid, F.id, F.name, F.cat, F.sup, F.unit, F.pq, F.pu, F.mode]);
+  if (P.food.length) await c.query(`INSERT INTO food_prices(food_id,date,price) SELECT * FROM unnest($1::uuid[],$2::date[],$3::numeric[])`, [P.food, P.date, P.price]);
+
+  // elenchi (più i fornitori citati dagli alimenti)
+  const lists = d.lists || {}, LK: string[] = [], LV: string[] = [], lseen = new Set<string>();
+  const addL = (k: string, v: unknown) => { const x = str(v, 100); if (x && !lseen.has(k + "|" + x)) { lseen.add(k + "|" + x); LK.push(k); LV.push(x); } };
+  for (const k of LIST_KINDS) for (const v of (Array.isArray(lists[k]) ? lists[k] : (DEFAULT_LISTS as any)[k] || [])) addL(k, v);
+  for (const sp of F.sup) addL("fornitori", sp);
+  if (LK.length) await c.query(`INSERT INTO lists(tenant_id,kind,value) SELECT $1,k,v FROM unnest($2::text[],$3::text[]) AS u(k,v) ON CONFLICT DO NOTHING`, [tid, LK, LV]);
+
+  // ricette (gli id nuovi servono subito per collegare le sotto-ricette)
+  const rmap = new Map<string, string>(), recs = d.recipes.slice(0, 20000).filter((r: any) => str(r?.name));
+  for (const r of recs) rmap.set(String(r.id), randomUUID());
+  const R = { id: [] as string[], name: [] as string[], type: [] as string[], por: [] as number[], yg: [] as (number | null)[], price: [] as (number | null)[], sold: [] as (number | null)[], time: [] as (number | null)[], avg: [] as boolean[], note: [] as string[] };
+  const W = { rec: [] as string[], food: [] as (string | null)[], sub: [] as (string | null)[], label: [] as string[], qty: [] as (number | null)[], waste: [] as (number | null)[], pos: [] as number[] };
+  const edges = new Map<string, Set<string>>();
+  for (const r of recs) {
+    const id = rmap.get(String(r.id))!;
+    R.id.push(id); R.name.push(str(r.name, 150)); R.type.push(str(r.type, 100)); R.por.push(numOrNull(r.portions, 0, 1e5) || 1);
+    R.yg.push(numOrNull(r.yieldG, 0, 1e8)); R.price.push(numOrNull(r.price, 0, 1e6)); R.sold.push(numOrNull(r.sold, 0, 1e9)); R.time.push(numOrNull(r.time, 0, 1e5));
+    R.avg.push(r.inAvg !== false); R.note.push(str(r.checkNote, 500));
+    let pos = 0;
+    for (const x of (Array.isArray(r.rows) ? r.rows : []).slice(0, 300)) {
+      if (!x || !(x.foodId || x.subId || str(x.name))) continue;
+      let sub = rmap.get(String(x.subId)) || null;
+      if (sub) {
+        // niente cicli (A dentro B dentro A): se il collegamento ne creerebbe uno, resta solo il nome
+        const reach = (from: string, to: string, vis = new Set<string>()): boolean => from === to || (!vis.has(from) && (vis.add(from), [...(edges.get(from) || [])].some((n) => reach(n, to, vis))));
+        if (reach(sub, id)) sub = null; else (edges.get(id) || edges.set(id, new Set()).get(id)!).add(sub);
+      }
+      W.rec.push(id); W.food.push(sub ? null : fmap.get(String(x.foodId)) || null); W.sub.push(sub); W.label.push(str(x.name, 150));
+      W.qty.push(numOrNull(x.qty, 0, 1e7)); W.waste.push(numOrNull(x.waste, 0, 99.9)); W.pos.push(pos++);
+    }
   }
-  for (const r of d.recipes) {
-    const nid = rmap.get(String(r?.id));
-    if (!nid) continue;
-    const rows = (Array.isArray(r.rows) ? r.rows : []).map((x: any) => ({
-      ...x, foodId: fmap.get(String(x.foodId)) || "", subId: rmap.get(String(x.subId)) || "",
-    }));
-    await saveRecipe(c, tid, nid, { ...r, rows });
-  }
-  if (d.salesAliases && typeof d.salesAliases === "object")
+  if (R.id.length) await c.query(
+    `INSERT INTO recipes(id,tenant_id,name,type,portions,yield_g,price,sold,prep_time,in_avg,check_note)
+     SELECT u.id,$1,u.n,u.t,u.p,u.y,u.pr,u.s,u.tm,u.a,u.no FROM unnest($2::uuid[],$3::text[],$4::text[],$5::numeric[],$6::numeric[],$7::numeric[],$8::numeric[],$9::numeric[],$10::boolean[],$11::text[]) AS u(id,n,t,p,y,pr,s,tm,a,no)`,
+    [tid, R.id, R.name, R.type, R.por, R.yg, R.price, R.sold, R.time, R.avg, R.note]);
+  if (W.rec.length) await c.query(
+    `INSERT INTO recipe_rows(recipe_id,food_id,sub_recipe_id,label,qty,waste_pct,position) SELECT * FROM unnest($1::uuid[],$2::uuid[],$3::uuid[],$4::text[],$5::numeric[],$6::numeric[],$7::int[])`,
+    [W.rec, W.food, W.sub, W.label, W.qty, W.waste, W.pos]);
+
+  // abbinamenti della cassa
+  if (d.salesAliases && typeof d.salesAliases === "object") {
+    const an: string[] = [], ar: (string | null)[] = [], aseen = new Set<string>();
     for (const [k, v] of Object.entries(d.salesAliases).slice(0, 3000)) {
       const name = str(k, 150).toLowerCase(), rid = v ? rmap.get(String(v)) : null;
-      if (name && (rid || !v)) await c.query(`INSERT INTO sales_aliases(tenant_id,cash_name,recipe_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [tid, name, rid || null]);
+      if (name && !aseen.has(name) && (rid || !v)) { aseen.add(name); an.push(name); ar.push(rid || null); }
     }
+    if (an.length) await c.query(`INSERT INTO sales_aliases(tenant_id,cash_name,recipe_id) SELECT $1,n,r FROM unnest($2::text[],$3::uuid[]) AS u(n,r) ON CONFLICT DO NOTHING`, [tid, an, ar]);
+  }
   if (d.salesGrain === "W" || d.salesGrain === "M") await c.query(`UPDATE tenants SET sales_grain=$2 WHERE id=$1`, [tid, d.salesGrain]);
   // vendite: formato nuovo {idRicetta: {"AAAA-MM" o "AAAA-Wnn": qty}}; altrimenti il vecchio campo "sold" nel mese soldPeriod (o il mese corrente)
   const fallback = /^\d{4}-\d{2}$/.test(String(d.soldPeriod || "")) ? d.soldPeriod : new Date().toISOString().slice(0, 7);
-  for (const r of d.recipes) {
-    const nid = rmap.get(String(r?.id));
-    if (!nid) continue;
+  const S = new Map<string, [string, string, string, number]>();
+  for (const r of recs) {
+    const nid = rmap.get(String(r.id))!;
     const per: Record<string, unknown> = (d.sales && typeof d.sales === "object" && d.sales[String(r.id)]) || (numOrNull(r.sold, 0, 1e9) ? { [fallback]: r.sold } : {});
     for (const [mm, v] of Object.entries(per)) {
-      const qty = numOrNull(v, 0, 1e7), per = parsePeriod(mm);
-      if (qty && per) await putSale(c, tid, nid, per, qty, "import");
+      const qty = numOrNull(v, 0, 1e7), pp = parsePeriod(mm);
+      if (qty && pp) S.set(nid + pp.grain + pp.date, [nid, pp.grain, pp.date, qty]);
     }
+  }
+  if (S.size) {
+    const v = [...S.values()];
+    await c.query(`INSERT INTO sales(tenant_id,recipe_id,grain,period,qty,source) SELECT $1,r,g,p,q,'import' FROM unnest($2::uuid[],$3::text[],$4::date[],$5::numeric[]) AS u(r,g,p,q)`,
+      [tid, v.map((x) => x[0]), v.map((x) => x[1]), v.map((x) => x[2]), v.map((x) => x[3])]);
   }
 }
 
