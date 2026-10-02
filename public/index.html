@@ -238,7 +238,7 @@ details.tc summary::-webkit-details-marker{display:none}
 .irow .iq{text-align:right;font-variant-numeric:tabular-nums}
 .irow select{min-height:34px;padding:4px 8px;font-size:13px}
 .ist{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;text-align:right}
-.ist.saved{color:var(--mut)}.ist.auto{color:var(--acc)}.ist.none{color:var(--warn)}.ist.gen,.ist.skip{color:var(--mut)}.ist.pend{color:var(--warn)}
+.ist.saved{color:var(--mut)}.ist.auto{color:var(--acc)}.ist.none{color:var(--warn)}.ist.gen,.ist.skip,.ist.mod{color:var(--mut)}.ist.pend{color:var(--warn)}
 .irow.pend{background:color-mix(in srgb,var(--warn) 12%,transparent);margin:0 -12px;padding:5px 12px;border-left:3px solid var(--warn)}
 .irow.pend select{border-color:var(--warn)}
 .ig>summary b.warn{color:var(--warn);font-weight:600}
@@ -1117,7 +1117,7 @@ function venditeHTML(){
       :'<input data-keep type="month" value="'+k+'" onchange="route.sm=this.value||thisMonth();render()">')
     +'<button class="sm" data-act="smnext" aria-label="'+(W?'Settimana':'Mese')+' successiv'+(W?'a':'o')+'">›</button>'
     +'<b class="smt'+(W?' wk':'')+'">'+(W?wkDates(k):mLabel(k))+'</b><span id="svstat" class="mut"></span>'
-    +(S.isSuper?'<button class="sm'+(RO?' sres':'')+'" data-act="impopen" style="margin-left:auto">Importa da cassa (CSV)</button><input type="file" id="cassaf" accept=".csv,text/csv,text/plain" hidden onchange="cassaFile(this)">':'')
+    +(S.isSuper?'<button class="sm'+(RO?' sres':'')+'" data-act="impopen" style="margin-left:auto">Importa vendite (CSV / Excel)</button><input type="file" id="cassaf" accept=".csv,.xls,.xlsx,text/csv,text/plain" hidden onchange="cassaFile(this)">':'')
     +(RO?'':'<button class="sm del'+(S.isSuper?'':' sres')+'" data-act="sreset">Azzera vendite…</button>')+'</div>';
   if(W){
     var wm=wkMonth(k),mono=S.recipes.some(function(r){return((S.sales||{})[r.id]||{})[wm]>0});
@@ -1149,7 +1149,7 @@ function sresetSheetHTML(){
     +'<div class="acts"><button class="pri danger" data-act="sresetgo">Sì, azzera'+(sc==='all'?' tutto':'')+'</button><button data-act="sresetclose">Annulla</button></div></div></div>';
 }
 /* ---------- importazione dall'export della cassa (CSV) ---------- */
-var CSTOP={e:1,di:1,al:1,alla:1,allo:1,ai:1,con:1,la:1,il:1,gr:1,g:1,kg:1};
+var CSTOP={e:1,di:1,al:1,alla:1,allo:1,ai:1,con:1,la:1,il:1,gr:1,g:1,kg:1,del:1,della:1,dello:1,dei:1,delle:1,'in':1,a:1,da:1};
 function cnorm(x){return String(x).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9. ]+/g,' ').trim()}
 function ctoks(x,keepNum){return cnorm(x).split(/\s+/).map(function(t){return t.replace(/\.+$/,'')}).filter(function(t){return t&&!CSTOP[t]&&(keepNum||!/^\d+$/.test(t))})}
 function clev(a,b){var m=a.length,n=b.length,d=[],i,j;for(i=0;i<=m;i++)d[i]=[i];for(j=0;j<=n;j++)d[0][j]=j;
@@ -1158,15 +1158,17 @@ function ctm(a,b){if(a===b)return 1;var sh=a.length<b.length?a:b,lo=a.length<b.l
   if(lo.indexOf(sh)===0&&(sh.length>=3||a.length===1))return .9;if(sh.length>=6&&clev(a,b)<=1)return .85;return 0}
 /* somiglianza tra il nome in cassa e una ricetta: parole in comune (anche abbreviate o con un errore di battitura) + reparto simile */
 function cscore(cash,rp,r){
-  var A=ctoks(cash),B=ctoks(r.name,true);if(!A.length||!B.length)return 0;
+  var A=ctoks(cash),B=ctoks(r.name,true),P=B.concat(ctoks(r.type||''));if(!A.length||!B.length)return[0,0];
   var best=function(x,L,f){return Math.max.apply(null,L.map(function(y){return f(x,y)}))};
-  var ca=A.reduce(function(t,a){return t+best(a,B,ctm)},0)/A.length,cb=B.reduce(function(t,b){return t+best(b,A,ctm)},0)/B.length;
+  // le parole del nome in cassa possono ritrovarsi anche nella tipologia (es. "INSALATONA CLASSICA" → CLASSICA tra le INSALATONE)
+  var ca=A.reduce(function(t,a){return t+best(a,P,ctm)},0)/A.length,cb=B.reduce(function(t,b){return t+best(b,A,ctm)},0)/B.length;
   var ty=cnorm(r.type||''),rr=cnorm(rp||''),bonus=rr&&ty&&(ty.indexOf(rr.slice(0,5))>=0||rr.indexOf(ty.slice(0,5))>=0)?.1:0;
-  return ca*.6+cb*.4+bonus;
+  return[ca*.7+cb*.3,bonus];
 }
 function csuggest(cash,rp){
-  var sc=S.recipes.map(function(r){return[cscore(cash,rp,r),r]}).sort(function(x,y){return y[0]-x[0]});
-  if(!sc.length||sc[0][0]<.6||(sc[1]&&sc[0][0]-sc[1][0]<.05))return null;return sc[0][1];
+  // la somiglianza del reparto serve solo a scegliere tra due ricette simili, non a far passare un abbinamento debole
+  var sc=S.recipes.map(function(r){var v=cscore(cash,rp,r);return[v[0]+v[1],r,v[0]]}).sort(function(x,y){return y[0]-x[0]});
+  if(!sc.length||sc[0][2]<.7||(sc[1]&&sc[0][0]-sc[1][0]<.05))return null;return sc[0][1];
 }
 function parseCsv(txt,sep){
   var out=[],row=[],f='',q=false,i,c;
@@ -1178,21 +1180,27 @@ function parseCsv(txt,sep){
   if(f||row.length){row.push(f);out.push(row)}return out;
 }
 function cdate(x){var m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(x||'').trim());return m?Date.UTC(+m[3],+m[2]-1,+m[1]):null}
+var MESI_RE=new RegExp('('+MESI.join('|')+')');
 function cassaParse(txt,fname){
-  var head=txt.slice(0,3000),sep=head.split(';').length>=head.split(',').length?';':',',rows=parseCsv(txt,sep),h=-1,col={};
+  var head=txt.slice(0,3000),sep=head.split(';').length>=head.split(',').length?';':',';
+  return cassaRows(parseCsv(txt,sep),fname);
+}
+/* righe del file (CSV o Excel) → voci da abbinare + periodo */
+function cassaRows(rows,fname){
+  var h=-1,col={},hn=function(x){return cnorm(x).replace(/\./g,'').replace(/\s+/g,' ')},find=function(low,re){for(var j=0;j<low.length;j++)if(re.test(low[j]))return j;return -1};
   for(var i=0;i<Math.min(rows.length,30)&&h<0;i++){
-    var low=rows[i].map(function(x){return cnorm(x)});
-    var ni=low.indexOf('plu');if(ni<0)ni=low.indexOf('descrizione');if(ni<0)ni=low.indexOf('articolo');
-    var qi=-1;low.forEach(function(x,j){if(qi<0&&/^(qta|qt|quantita|qty|pezzi)$/.test(x.replace(/\./g,'')))qi=j});
-    if(ni>=0&&qi>=0){h=i;col={n:ni,q:qi,g:low.indexOf('gruppo'),r:low.indexOf('reparto')}}
+    var low=(rows[i]||[]).map(hn);
+    var ni=find(low,/^(plu|descrizione articolo|descrizione|articolo|prodotto|piatto)$/);
+    var qi=find(low,/^qta reale$/);if(qi<0)qi=find(low,/^(qta|qt|quantita|qty|pezzi|qta totale|quantita totale)$/);
+    if(ni>=0&&qi>=0){h=i;col={n:ni,q:qi,g:find(low,/^gruppo$/),r:find(low,/^(reparto|descrizione reparto)$/)}}
   }
-  if(h<0)throw new Error('Nel file non trovo le colonne "Plu" e "Qta". È l’export delle vendite della cassa?');
-  var dal=null,al=null;rows.slice(0,h).forEach(function(r){r.forEach(function(x,j){var k=cnorm(x);if(k==='dal')dal=cdate(r[j+1]);if(k==='al')al=cdate(r[j+1])})});
-  var by={},items=[];
+  if(h<0)throw new Error('Nel file non trovo le colonne con il nome del piatto e la quantità (es. "Plu" e "Qta"). È l’export delle vendite della cassa?');
+  var dal=null,al=null;rows.slice(0,h).forEach(function(r){(r||[]).forEach(function(x,j){var k=cnorm(x);if(k==='dal')dal=cdate(r[j+1]);if(k==='al')al=cdate(r[j+1])})});
+  var by={},items=[],qn=function(v){return typeof v==='number'?v:num(String(v==null?'':v).replace(/\./g,'').replace(',','.'))};
   rows.slice(h+1).forEach(function(r){
-    var name=String(r[col.n]||'').trim(),q=num(String(r[col.q]||'').replace(/\./g,'').replace(',','.'));if(!name||!(q>0))return;
-    var key=name.toLowerCase();
-    if(!by[key]){by[key]={name:name,group:col.g>=0?String(r[col.g]||'').trim():'',rep:col.r>=0?String(r[col.r]||'').trim():'',qty:0};items.push(by[key])}
+    r=r||[];var name=String(r[col.n]==null?'':r[col.n]).trim(),q=qn(r[col.q]);if(!name||!(q>0))return;
+    var key=name.toLowerCase(),rp=col.r>=0?String(r[col.r]||'').trim():'';
+    if(!by[key]){by[key]={name:name,group:col.g>=0?String(r[col.g]||'').trim():rp,rep:rp,qty:0};items.push(by[key])}
     by[key].qty+=q;
   });
   if(!items.length)throw new Error('Nel file non ci sono righe con quantità vendute.');
@@ -1201,27 +1209,52 @@ function cassaParse(txt,fname){
     var key=x.name.toLowerCase();
     if(key in A&&(A[key]===''||recipeById(A[key]))){x.rid=A[key]||'-';x.st='saved'}
     else if(cnorm(x.rep)==='vendita a gruppo'){x.rid='-';x.st='gen'}
+    else if(/^[+-]/.test(x.name)){x.rid='-';x.st='mod'}
     else{var sg=csuggest(x.name,x.rep||x.group);x.rid=sg?sg.id:'';x.st=sg?'auto':'none'}
   });
   // gruppi della cassa senza nessun piatto riconosciuto (bevande, coperti…): ignorati senza segnalarli
-  var hit={};items.forEach(function(x){if(x.rid&&x.rid!=='-')hit[x.group]=1});
+  var hit={};items.forEach(function(x){if(isRec(x.rid))hit[x.group]=1});
   items.forEach(function(x){if(x.st==='none'&&!hit[x.group]){x.st='skip';x.rid='-'}});
-  var week=dal!=null?wkOfUTC(dal):salesWeekSel(),warn='';
-  if(dal==null)warn='Nel file non trovo le date “Dal / Al”: scegli tu la settimana.';
-  else if(new Date(dal).getUTCDay()!==1||(al!=null&&Math.round((al-dal)/864e5)!==6))warn='Attenzione: il periodo del file non va da lunedì a domenica. Controlla la settimana.';
-  return{file:fname,items:items,week:week,dal:dal,al:al,warn:warn,open:{}};
+  // periodo: date "Dal/Al" nel file (settimana), altrimenti il mese scritto nel nome del file
+  var per,warn='',fm=MESI_RE.exec(cnorm(fname||''));
+  if(dal!=null){per=wkOfUTC(dal);if(new Date(dal).getUTCDay()!==1||(al!=null&&Math.round((al-dal)/864e5)!==6))warn='Attenzione: il periodo del file non va da lunedì a domenica. Controlla la settimana.'}
+  else if(fm){
+    var mo=MESI.indexOf(fm[1])+1,ym=/(20\d\d)/.exec(fname||''),now=new Date(),y=ym?+ym[1]:(mo>now.getMonth()+1?now.getFullYear()-1:now.getFullYear());
+    per=y+'-'+String(mo).padStart(2,'0');if(!ym)warn='L’anno non è scritto nel file: ho messo il '+y+'. Controllalo qui sopra.';
+  }
+  else{per=curSalesKey();warn='Nel file non trovo il periodo: scegli tu '+(isWk(per)?'la settimana':'il mese')+'.'}
+  return{file:fname,items:items,week:per,dal:dal,al:al,warn:warn,open:{}};
+}
+function loadXlsx(){
+  if(window.XLSX)return Promise.resolve(window.XLSX);
+  return new Promise(function(ok,ko){var sc=document.createElement('script');sc.src='/vendor/xlsx.core.min.js';sc.onload=function(){ok(window.XLSX)};sc.onerror=function(){ko(new Error('Non riesco a caricare il lettore dei file Excel. Riprova.'))};document.head.appendChild(sc)});
 }
 function cassaFile(inp){
   var f=inp.files&&inp.files[0];inp.value='';if(!f)return;
-  f.arrayBuffer().then(function(buf){
-    var txt;try{txt=new TextDecoder('utf-8',{fatal:true}).decode(buf)}catch(e){txt=new TextDecoder('windows-1252').decode(buf)}
-    route.imp=cassaParse(txt.replace(/^﻿/,''),f.name);render();
+  var xl=/\.(xlsx?|xlsm|ods)$/i.test(f.name);
+  Promise.all([f.arrayBuffer(),xl?loadXlsx():null]).then(function(v){
+    var buf=v[0];
+    if(xl){
+      var wb=v[1].read(new Uint8Array(buf),{type:'array'}),rows=null;
+      // primo foglio che contiene le colonne giuste
+      for(var i=0;i<wb.SheetNames.length;i++){var r=v[1].utils.sheet_to_json(wb.Sheets[wb.SheetNames[i]],{header:1,raw:true,defval:''});try{route.imp=cassaRows(r,f.name);rows=r;break}catch(e){if(i===wb.SheetNames.length-1)throw e}}
+    }else{
+      var txt;try{txt=new TextDecoder('utf-8',{fatal:true}).decode(buf)}catch(e){txt=new TextDecoder('windows-1252').decode(buf)}
+      route.imp=cassaParse(txt.replace(/^﻿/,''),f.name);
+    }
+    render();
   }).catch(function(e){toast(e.message||'File non leggibile.')});
 }
-var IST={saved:'ricordato',auto:'proposto',none:'da assegnare',gen:'generico',skip:'ignorato',manual:'scelto'};
+var IST={saved:'ricordato',auto:'proposto',none:'da assegnare',gen:'generico',mod:'variante',skip:'ignorato',manual:'scelto'};
 function isRec(v){return v&&v!=='-'}
 function impSet(i,v){var x=route.imp.items[i];x.rid=v;x.st=v?'manual':'none';impRefresh()}
-function impWeek(){var y=Math.round(num(val('iwy'))),w=Math.round(num(val('iwn')));if(y>=2000&&y<=2100&&w>=1){route.imp.week=wkKey(y,Math.min(w,isoWeeksIn(y)))}impRefresh()}
+function impWeek(){
+  var I=route.imp,g=val('ipg'),y=Math.round(num(val('iwy')));if(!(y>=2000&&y<=2100)){impRefresh();return}
+  if(g==='W'){var w=isWk(I.week)?Math.round(num(val('iwn')))||1:+wkOfUTC(Date.UTC(y,+I.week.slice(5,7)-1,4)).slice(6);I.week=wkKey(y,Math.min(Math.max(1,w),isoWeeksIn(y)))}
+  else{var m=isWk(I.week)?+wkMonth(I.week).slice(5,7):Math.round(num(val('imo')))||1;I.week=y+'-'+String(m).padStart(2,'0')}
+  impRefresh();
+}
+function impPerLabel(k){return isWk(k)?'la settimana '+(+k.slice(6)):mLabel(k)}
 function impRefresh(){var sh=document.querySelector('#sheet .sheet'),y=sh?sh.scrollTop:0;document.getElementById('sheet').innerHTML=impSheetHTML();sh=document.querySelector('#sheet .sheet');if(sh)sh.scrollTop=y}
 function impSheetHTML(){
   var I=route.imp,f=function(n){return n.toLocaleString('it-IT')},G=[],gi={};
@@ -1229,19 +1262,32 @@ function impSheetHTML(){
   I.items.forEach(function(x,i){var k=x.group||'Altro';if(!(k in gi)){gi[k]=G.length;G.push({t:k,rows:[]})}G[gi[k]].rows.push(i)});
   var mq=0,mr=0,ig=0,np=0,pq=0,rec={};I.items.forEach(function(x){if(isRec(x.rid)){mq+=x.qty;mr++;rec[x.rid]=1}else if(x.rid==='-')ig++;else{np++;pq+=x.qty}});
   if(!np)I.only=false;
-  var wk=+I.week.slice(6),dd=function(ms){var d=new Date(ms);return d.getUTCDate()+' '+MBR[d.getUTCMonth()]+' '+d.getUTCFullYear()};
+  var W=isWk(I.week),wk=W?+I.week.slice(6):0,PL=impPerLabel(I.week),mix='';
+  // avviso se lo stesso mese ha già vendite dell'altro tipo (si sommerebbero)
+  Object.keys(S.sales||{}).some(function(id){return Object.keys(S.sales[id]).some(function(k){
+    if(W&&!isWk(k)&&k===wkMonth(I.week)&&S.sales[id][k]>0){mix='Per '+mLabel(k)+' ci sono già vendite inserite a mese intero: si sommeranno a questa settimana.';return true}
+    if(!W&&isWk(k)&&wkMonth(k)===I.week&&S.sales[id][k]>0){mix='Per '+mLabel(I.week)+' ci sono già vendite settimanali: si sommeranno a questo mese. Se sono le stesse vendite, prima azzera le settimane.';return true}
+    return false})});
+  var dd=function(ms){var d=new Date(ms);return d.getUTCDate()+' '+MBR[d.getUTCMonth()]+' '+d.getUTCFullYear()};
   var h='<div class="sheet-bg" data-act="closebg"><div class="sheet wide"><h2>Importa vendite dalla cassa</h2>'
     +'<p class="mut" style="margin:-4px 0 10px">File <b>'+esc(I.file)+'</b>'+(I.dal!=null?' · dal '+dd(I.dal)+(I.al!=null?' al '+dd(I.al):''):'')+'</p>'
-    +'<div class="iwk"><label for="iwn">Settimana</label><input id="iwn" type="number" min="1" max="53" value="'+wk+'" onchange="impWeek()"><input id="iwy" type="number" min="2000" max="2100" value="'+I.week.slice(0,4)+'" onchange="impWeek()" aria-label="Anno"><b>'+wkDates(I.week)+'</b><span class="mut">· conta in '+mLabel(wkMonth(I.week))+'</span></div>'
+    +'<div class="iwk"><select id="ipg" class="csel" aria-label="Tipo di periodo" onchange="impWeek()"><option value="W"'+(W?' selected':'')+'>Settimana</option><option value="M"'+(W?'':' selected')+'>Mese</option></select>'
+      +(W?'<input id="iwn" type="number" min="1" max="53" value="'+wk+'" onchange="impWeek()" aria-label="Numero settimana">'
+         :'<select id="imo" class="csel" onchange="impWeek()" aria-label="Mese">'+MESI.map(function(m,j){return'<option value="'+(j+1)+'"'+(+I.week.slice(5,7)===j+1?' selected':'')+'>'+m+'</option>'}).join('')+'</select>')
+      +'<input id="iwy" type="number" min="2000" max="2100" value="'+I.week.slice(0,4)+'" onchange="impWeek()" aria-label="Anno">'
+      +(W?'<b>'+wkDates(I.week)+'</b><span class="mut">· conta in '+mLabel(wkMonth(I.week))+'</span>':'<b style="text-transform:capitalize">'+mLabel(I.week)+'</b>')+'</div>'
+    +(mix?'<p class="warn" style="margin:0 0 10px;font-size:14px">'+mix+'</p>':'')
     +(I.warn?'<p class="warn" style="margin:0 0 10px;font-size:14px">'+esc(I.warn)+'</p>':'')
     +'<div class="tot" style="margin:0 0 10px"><div class="r"><span>Abbinate a una ricetta</span><b>'+mr+' voci · '+f(mq)+' pezzi su '+Object.keys(rec).length+' piatti</b></div>'
     +'<div class="r"><span>Ignorate (bevande, coperti, voci che non sono piatti)</span><b>'+ig+'</b></div>'
     +'<div class="r"><span>'+(np?'<b class="warn">Da assegnare</b>':'Da assegnare')+'</span><b'+(np?' class="warn"':'')+'>'+(np?np+' voci · '+f(pq)+' pezzi':'nessuna ✓')+'</b></div>'
     +(np?'<div class="mut" style="font-size:13px">Per ogni voce gialla scegli la ricetta, oppure <b>“Ignora (non è un piatto)”</b>. Le voci lasciate da assegnare non entrano nelle vendite e te le ripropongo al prossimo file.</div>':'')+'</div>'
     +(np?'<label class="ionly"><input type="checkbox"'+(I.only?' checked':'')+' onchange="route.imp.only=this.checked;impRefresh()"> Mostra solo le voci da assegnare ('+np+')</label>':'')
-    +'<p class="mut" style="font-size:13px;margin:0 0 12px">Le vendite già presenti per la settimana '+wk+' vengono sostituite. Gli abbinamenti e le voci ignorate vengono ricordati per i prossimi file.'+(S.salesGrain==='W'?'':' Il cliente passerà all’inserimento per settimana.')+'</p>';
+    +'<p class="mut" style="font-size:13px;margin:0 0 12px">Le vendite già presenti per '+PL+' vengono sostituite. Gli abbinamenti e le voci ignorate vengono ricordati per i prossimi file.'+(S.salesGrain===(W?'W':'M')?'':' Il cliente passerà all’inserimento per '+(W?'settimana':'mese')+'.')+'</p>';
   G.forEach(function(g,k){
-    var vis=g.rows.filter(function(i){return !I.only||!I.items[i].rid});if(!vis.length)return;
+    // prima le voci da assegnare, poi quelle abbinate, in fondo ignorate e varianti
+    var rk=function(i){var x=I.items[i];return !x.rid?0:isRec(x.rid)?1:x.st==='mod'?3:2};
+    var vis=g.rows.filter(function(i){return !I.only||!I.items[i].rid}).sort(function(a,b){return rk(a)-rk(b)||a-b});if(!vis.length)return;
     var m=g.rows.filter(function(i){return isRec(I.items[i].rid)}).length,p=g.rows.filter(function(i){return !I.items[i].rid}).length,q=g.rows.reduce(function(t,i){return t+(isRec(I.items[i].rid)?I.items[i].qty:0)},0);
     var open=I.only||(k in I.open?I.open[k]:(m>0||p>0||g.rows.some(function(i){return I.items[i].st==='manual'})));
     h+='<details class="ig"'+(open?' open':'')+' ontoggle="route.imp.open['+k+']=this.open"><summary>'+esc(g.t)+'<span>'+(p?'<b class="warn">'+p+' da assegnare</b> · ':'')+g.rows.length+(g.rows.length===1?' voce · ':' voci · ')+(m?m+' abbinate, '+f(q)+' pezzi':'tutte ignorate')+'</span></summary>'
@@ -1250,7 +1296,7 @@ function impSheetHTML(){
           +'<select aria-label="Ricetta per '+esc(x.name)+'" onchange="impSet('+i+',this.value)"><option value=""'+sel('')+'>— Da assegnare —</option><option value="-"'+sel('-')+'>Ignora (non è un piatto)</option>'+(isRec(x.rid)?opts.replace('value="'+x.rid+'"','value="'+x.rid+'" selected'):opts)+'</select>'
           +'<span class="ist '+(x.rid?x.st:'pend')+'">'+(x.rid?(x.rid==='-'&&x.st==='manual'?'ignorato':IST[x.st]):'da assegnare')+'</span></div>'}).join('')+'</details>';
   });
-  return h+'<div class="acts"><button class="pri" data-act="impgo"'+(mr?'':' disabled')+'>Importa la settimana '+wk+' ('+f(mq)+' pezzi)'+(np?' · '+np+' da assegnare restano fuori':'')+'</button><button data-act="impclose">Annulla</button></div></div></div>';
+  return h+'<div class="acts"><button class="pri" data-act="impgo"'+(mr?'':' disabled')+'>Importa '+PL+' ('+f(mq)+' pezzi)'+(np?' · '+np+' da assegnare restano fuori':'')+'</button><button data-act="impclose">Annulla</button></div></div></div>';
 }
 /* ---------- andamento vendite: settimana su settimana, mese su mese, trimestre su trimestre, anno su anno ---------- */
 var MBR=['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
@@ -1540,9 +1586,9 @@ document.addEventListener('click',function(e){
   else if(a==='impopen'){flushSales();var cf=document.getElementById('cassaf');if(cf)cf.click()}
   else if(a==='impclose'){route.imp=null;render()}
   else if(a==='impgo'){
-    var I=route.imp;if(!I||!isWk(I.week))return;
+    var I=route.imp;if(!I)return;
     busy(t,api('POST','/sales/import',{period:I.week,rows:I.items.map(function(x){return{name:x.name,recipeId:isRec(x.rid)?x.rid:null,qty:x.qty,ignore:x.rid==='-'&&(x.st==='saved'||x.st==='manual')}})})).then(function(d){
-      route.imp=null;route.sw=I.week;route.tr=null;return loadData().then(function(){render();toast('Importati '+num(d.qty).toLocaleString('it-IT')+' pezzi su '+d.recipes+' piatti nella '+wkLabel(I.week).split(' · ')[0]+'.')});
+      route.imp=null;if(isWk(I.week))route.sw=I.week;else route.sm=I.week;route.tr=null;return loadData().then(function(){render();toast('Importati '+num(d.qty).toLocaleString('it-IT')+' pezzi su '+d.recipes+' piatti: '+impPerLabel(I.week)+'.')});
     }).catch(showErr)}
   else if(a==='sresetgo'){
     if(RO)return;var all=route.sreset.scope==='all',k=curSalesKey();clearTimeout(timers.sales);SPEND={};

@@ -275,12 +275,12 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
   }
 
   if (path === "/sales/import" && m === "POST") {
-    // importazione di una settimana dall'export della cassa (solo super admin):
+    // importazione di una settimana o di un mese dall'export della cassa (solo super admin):
     // rows = [{name, recipeId|null, qty, ignore}]; sostituisce le vendite della settimana e ricorda gli abbinamenti
     // (ignore = scelta esplicita "non è un piatto"; senza ricetta e senza ignore la voce resta "da assegnare")
     if (!s.isSuper) throw forbidden("Solo l'amministratore può importare le vendite dalla cassa.");
     const per = parsePeriod(b.period);
-    if (!per || per.grain !== "W") throw bad("Settimana non valida.");
+    if (!per) throw bad("Periodo non valido.");
     const rows = (Array.isArray(b.rows) ? b.rows : []).slice(0, 3000).map((x: any) => ({
       name: str(x?.name, 150).toLowerCase(), recipeId: x?.recipeId ? uuidOrNull(x.recipeId) : null, qty: numOrNull(x?.qty, 0, 1e7) || 0, ignore: x?.ignore === true, bad: x?.recipeId && !uuidOrNull(x.recipeId),
     })).filter((x: any) => x.name);
@@ -293,7 +293,7 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
     const tot = new Map<string, number>();
     for (const x of rows) if (x.recipeId && x.qty) tot.set(x.recipeId, (tot.get(x.recipeId) || 0) + x.qty);
     await tx(async (c) => {
-      await c.query(`DELETE FROM sales WHERE tenant_id=$1 AND grain='W' AND period=$2::date`, [tid, per.date]);
+      await c.query(`DELETE FROM sales WHERE tenant_id=$1 AND grain=$2 AND period=$3::date`, [tid, per.grain, per.date]);
       for (const [rid, qty] of tot) await putSale(c, tid, rid, per, qty, "cassa");
       for (const x of rows) {
         if (x.recipeId || x.ignore)
@@ -301,7 +301,7 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
             ON CONFLICT (tenant_id,cash_name) DO UPDATE SET recipe_id=EXCLUDED.recipe_id`, [tid, x.name, x.recipeId]);
         else await c.query(`DELETE FROM sales_aliases WHERE tenant_id=$1 AND cash_name=$2`, [tid, x.name]);
       }
-      await c.query(`UPDATE tenants SET sales_grain='W' WHERE id=$1`, [tid]);
+      await c.query(`UPDATE tenants SET sales_grain=$2 WHERE id=$1`, [tid, per.grain]);
     });
     return json({ ok: true, recipes: tot.size, qty: [...tot.values()].reduce((a, v) => a + v, 0) });
   }
