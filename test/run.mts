@@ -366,6 +366,18 @@ section("Vendite settimanali e azzeramento");
   await A.put("/sales", { period: "2026-09", items: [{ recipeId: r1, qty: 55 }] });
 }
 
+section("Nota da verificare sulla ricetta");
+{
+  const rid = (await A.get("/data")).data.recipes[0].id;
+  ok((await A.patch("/recipes/" + rid, { checkNote: "Chiedere al titolare il fondo bruno" })).status === 200 && (await A.get("/data")).data.recipes.find((x: any) => x.id === rid).checkNote === "Chiedere al titolare il fondo bruno", "nota salvata");
+  const full = (await A.get("/data")).data.recipes.find((x: any) => x.id === rid);
+  await A.put("/recipes/" + rid, { ...full });
+  ok((await A.get("/data")).data.recipes.find((x: any) => x.id === rid).checkNote === "Chiedere al titolare il fondo bruno", "salvando la ricetta la nota resta");
+  ok((await V.patch("/recipes/" + rid, { checkNote: "" })).status === 403, "il viewer non può toglierla");
+  await A.patch("/recipes/" + rid, { checkNote: "" });
+  ok((await A.get("/data")).data.recipes.find((x: any) => x.id === rid).checkNote === "", "verificato: nota tolta");
+}
+
 section("Persona autorizzata aggiunta a un cliente esistente");
 {
   ok((await A.post("/admin/tenants/" + tB.id + "/admins", { name: "X", email: "x@x.it" })).status === 403, "solo il super admin aggiunge persone");

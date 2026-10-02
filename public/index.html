@@ -125,6 +125,10 @@ input:disabled,select:disabled,textarea:disabled{opacity:1;color:var(--ink);back
 .adm .row>*{flex:1;min-width:130px}
 .adm-row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.adm-row .sm{margin-left:6px}
 .adm-add{margin-top:10px}
+.chkbar{background:color-mix(in srgb,var(--warn) 14%,transparent);border:1px solid var(--warn);border-radius:10px;padding:8px 12px;margin:0 0 10px;font-size:14px;cursor:pointer}.chkbar span{color:var(--mut)}
+.card.item.tocheck{border-left:4px solid var(--warn)}
+.chknote{display:block;color:var(--warn);font-size:12px;font-weight:600;margin-top:2px}
+.chkbox{display:flex;justify-content:space-between;align-items:center;gap:10px;background:color-mix(in srgb,var(--warn) 14%,transparent);border:1px solid var(--warn);border-radius:10px;padding:10px 12px;margin:0 0 12px;font-size:14px}.chkbox b{color:var(--warn)}
 .chk{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);margin:6px 0}
 .chk input{width:auto;min-height:0}
 .tmp{background:rgba(183,121,31,.14);border:1px solid var(--warn);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:14px}
@@ -484,7 +488,7 @@ function render(){
   if(route.restoreY!=null&&!route.recipe){window.scrollTo(0,route.restoreY);route.restoreY=null}
 }
 /* sola lettura: nasconde i pulsanti di modifica e blocca i campi (il server rifiuta comunque ogni scrittura) */
-var WRITE=['sreset','bulkmode','newfood','savefood','delfood','addprice','delprice','newrecipe','saverecipe','dupl','delrecipe','addrow','delrow','addlist','dellist'];
+var WRITE=['sreset','checkdone','bulkmode','newfood','savefood','delfood','addprice','delprice','newrecipe','saverecipe','dupl','delrecipe','addrow','delrow','addlist','dellist'];
 function applyRO(){
   if(!RO||!S||route.tab==='clienti')return;
   ['app'].concat(route.food&&!route.pw?['sheet']:[]).forEach(function(id){
@@ -595,14 +599,16 @@ function counterHTML(){
     +(S.isSuper&&m!=null&&S.recipeCount>=m?' · <span class="mut">come super admin puoi superare il limite</span>':'')+'</div>';
 }
 function recipesHTML(){
-  var lk=lockRecipe();
+  var lk=lockRecipe(),nchk=S.recipes.filter(function(r){return r.checkNote}).length;if(route.cat==='__check'&&!nchk)route.cat='';
   return'<div class="bar"><input id="q" data-keep placeholder="Cerca ricetta" value="'+esc(route.q)+'" oninput="route.q=this.value;document.getElementById(\'rlist\').innerHTML=recipesList()">'
-  +'<select data-keep onchange="route.cat=this.value;render()"><option value="">Tutte le tipologie</option>'+S.lists.tipologie.map(function(c){return'<option'+(route.cat===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select>'
-  +'<button class="pri'+(lk?' locked':'')+'" data-act="newrecipe">+ Ricetta</button></div>'+counterHTML()+'<div id="lockmsg" class="lockmsg"></div><div id="rlist">'+recipesList()+'</div>';
+  +'<select data-keep onchange="route.cat=this.value;render()"><option value="">Tutte le tipologie</option>'+(nchk?'<option value="__check"'+(route.cat==='__check'?' selected':'')+'>⚠ Da verificare ('+nchk+')</option>':'')+S.lists.tipologie.map(function(c){return'<option'+(route.cat===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select>'
+  +'<button class="pri'+(lk?' locked':'')+'" data-act="newrecipe">+ Ricetta</button></div>'+counterHTML()
+  +(nchk&&route.cat!=='__check'?'<div class="chkbar" data-act="showcheck">⚠ <b>'+nchk+(nchk===1?' ricetta da verificare':' ricette da verificare')+'</b> <span>— mostra solo quelle</span></div>':'')
+  +'<div id="lockmsg" class="lockmsg"></div><div id="rlist">'+recipesList()+'</div>';
 }
 function recipesList(){
   var q=route.q.toLowerCase();
-  var list=S.recipes.filter(function(r){return(!q||r.name.toLowerCase().indexOf(q)>=0)&&(!route.cat||r.type===route.cat)}).sort(function(a,b){return a.name.localeCompare(b.name,'it')});
+  var list=S.recipes.filter(function(r){return(!q||r.name.toLowerCase().indexOf(q)>=0)&&(!route.cat||(route.cat==='__check'?!!r.checkNote:r.type===route.cat))}).sort(function(a,b){return a.name.localeCompare(b.name,'it')});
   if(!S.recipes.length)return'<div class="empty">Nessuna ricetta.'+(RO?'':'<br>Prima inserisci qualche alimento, poi tocca “+ Ricetta”.')+'</div>';
   if(!list.length)return'<div class="empty">Nessun risultato.</div>';
   // divise per tipologia, nell'ordine dell'elenco tipologie (come in Marginalità); in fondo quelle senza tipologia
@@ -612,17 +618,19 @@ function recipesList(){
   return keys.map(function(k){
     var rs=list.filter(function(r){return(order.indexOf(r.type)>=0?r.type:'')===k});
     return'<h2 class="gh rgh">'+esc(k||'Senza tipologia')+' <span class="cnt">'+rs.length+'</span></h2>'+rs.map(function(r){var t=recipeTotal(r),d=num(r.portions)||1;
-      return'<div class="card item" data-act="editrecipe" data-id="'+r.id+'"><div><b>'+esc(r.name)+'</b><span class="mut">'+r.rows.length+' ingr.'+(num(r.price)>0?' · prezzo '+eur(num(r.price)):'')+'</span></div>'
+      return'<div class="card item'+(r.checkNote?' tocheck':'')+'" data-act="editrecipe" data-id="'+r.id+'"><div><b>'+esc(r.name)+'</b><span class="mut">'+r.rows.length+' ingr.'+(num(r.price)>0?' · prezzo '+eur(num(r.price)):'')+'</span>'+(r.checkNote?'<span class="chknote">⚠ Da verificare: '+esc(r.checkNote)+'</span>':'')+'</div>'
       +'<div class="right"><b>'+eur(t.total/d)+'</b><span class="mut">per dose'+(t.miss?' <span class="warn">· '+t.miss+' senza prezzo</span>':'')+'</span></div></div>'}).join('');
   }).join('');
 }
 function recipeEditorHTML(){
   var r=route.recipe;
   return'<div class="bar"><button data-act="backrecipe">← '+(route.from?{marginalita:'Marginalità',menu:'Menù Ingegnerizzato',vendite:'Vendite'}[route.from]:'Ricette')+'</button></div><div class="redit"><div class="rleft">'
+  +(r.checkNote?'<div class="chkbox"><div><b>⚠ Da verificare</b><br>'+esc(r.checkNote)+'</div>'+(RO?'':'<button class="sm" data-act="checkdone">Verificato ✓</button>')+'</div>':'')
   +'<label>Nome piatto *<input value="'+esc(r.name)+'" oninput="route.recipe.name=this.value" placeholder="es. Calzone"></label>'
   +'<div class="grid2"><label>Tipologia<select onchange="route.recipe.type=this.value"><option value="">—</option>'+S.lists.tipologie.map(function(c){return'<option'+(r.type===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select></label>'
   +'<label>Dosi (porzioni della ricetta)<input type="number" inputmode="decimal" value="'+esc(r.portions)+'" oninput="route.recipe.portions=this.value;recalc()"></label></div>'
   +'<label>Resa totale in grammi (facoltativa)<input type="number" inputmode="decimal" value="'+esc(r.yieldG||'')+'" oninput="route.recipe.yieldG=this.value;recalc()" placeholder="es. 1625 per un impasto"></label>'
+  +'<label>Nota da verificare (facoltativa)<input id="r-chk" value="'+esc(r.checkNote||'')+'" oninput="route.recipe.checkNote=this.value" placeholder="es. chiedere al titolare quale fondo bruno usa"></label>'
   +'<p class="mut" style="margin:-4px 0 10px">Serve se usi questa ricetta come ingrediente di altre (es. la pallina nelle pizze): con la resa la inserirai in grammi, senza resa in dosi.</p>'
   +'<h2 style="font-size:17px;margin:6px 0 10px">Ingredienti</h2>'
   +'<datalist id="foodlist">'+S.foods.map(function(f){return'<option value="'+esc(f.name)+'">'}).join('')
@@ -1563,7 +1571,7 @@ document.addEventListener('submit',function(e){
 
 /* ---------- eventi ---------- */
 function rowsOut(r){return r.rows.filter(function(x){return x.foodId||x.subId||x.name}).map(function(x){return{foodId:x.foodId||'',subId:x.subId||'',name:x.name||'',qty:x.qty,waste:x.waste}})}
-function recipeOut(r){return{inAvg:r.inAvg!==false,name:r.name.trim(),type:r.type||'',portions:r.portions,yieldG:r.yieldG||'',price:r.price,sold:r.sold||'',time:r.time||'',rows:rowsOut(r)}}
+function recipeOut(r){return{checkNote:(r.checkNote||'').trim(),inAvg:r.inAvg!==false,name:r.name.trim(),type:r.type||'',portions:r.portions,yieldG:r.yieldG||'',price:r.price,sold:r.sold||'',time:r.time||'',rows:rowsOut(r)}}
 function armed(t,label){if(t.dataset.armed)return true;t.dataset.armed='1';t.textContent=label;return false}
 document.addEventListener('click',function(e){
   var t=e.target.closest('[data-tab],[data-act]');if(!t)return;
@@ -1624,6 +1632,8 @@ document.addEventListener('click',function(e){
       if(all)S.sales={};else Object.keys(S.sales||{}).forEach(function(id){delete S.sales[id][k]});
       route.sreset=null;applySales();render();toast(d.deleted?'Vendite azzerate.':'Non c’erano vendite da azzerare.');
     }).catch(showErr)}
+  else if(a==='showcheck'){route.cat='__check';render()}
+  else if(a==='checkdone'){if(RO)return;var cr=route.recipe;busy(t,api('PATCH','/recipes/'+cr.id,{checkNote:''})).then(function(){cr.checkNote='';var o=recipeById(cr.id);if(o)o.checkNote='';render();toast('Segnato come verificato.')}).catch(showErr)}
   else if(a==='editfood'){route.food=clone(foodById(id));render()}
   else if(a==='ingfood'){var fi=foodById(id);if(!fi)return;route.food=clone(fi);render()}
   else if(a==='bulkmode'){if(RO)return;var vf=visibleFoods();if(!vf.length){toast('Nessun alimento in elenco.');return}

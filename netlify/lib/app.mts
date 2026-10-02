@@ -380,6 +380,7 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
         const map: Record<string, [string, number]> = { price: ["price", 1e6], sold: ["sold", 1e9], time: ["prep_time", 1e5] };
         for (const k of Object.keys(map)) if (k in b) { vals.push(numOrNull(b[k], 0, map[k][1])); sets.push(`${map[k][0]}=$${vals.length}`); }
         if (typeof b.inAvg === "boolean") { vals.push(b.inAvg); sets.push(`in_avg=$${vals.length}`); }
+        if (typeof b.checkNote === "string") { vals.push(str(b.checkNote, 500)); sets.push(`check_note=$${vals.length}`); }
         if (sets.length) await q(`UPDATE recipes SET ${sets.join(",")} WHERE id=$1 AND tenant_id=$2`, vals);
         return json({ ok: true });
       }
@@ -435,9 +436,9 @@ async function saveRecipe(c: Queryable, tid: string, id: string | null, b: any):
   }
 
   const vals = [tid, name, str(b.type, 100), numOrNull(b.portions, 0, 1e5) || 1, numOrNull(b.yieldG, 0, 1e8),
-    numOrNull(b.price, 0, 1e6), numOrNull(b.sold, 0, 1e9), numOrNull(b.time, 0, 1e5), rid, b.inAvg !== false];
-  if (isNew) await c.query(`INSERT INTO recipes(tenant_id,name,type,portions,yield_g,price,sold,prep_time,id,in_avg) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, vals);
-  else await c.query(`UPDATE recipes SET name=$2,type=$3,portions=$4,yield_g=$5,price=$6,sold=$7,prep_time=$8,in_avg=$10 WHERE id=$9 AND tenant_id=$1`, vals);
+    numOrNull(b.price, 0, 1e6), numOrNull(b.sold, 0, 1e9), numOrNull(b.time, 0, 1e5), rid, b.inAvg !== false, str(b.checkNote, 500)];
+  if (isNew) await c.query(`INSERT INTO recipes(tenant_id,name,type,portions,yield_g,price,sold,prep_time,id,in_avg,check_note) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, vals);
+  else await c.query(`UPDATE recipes SET name=$2,type=$3,portions=$4,yield_g=$5,price=$6,sold=$7,prep_time=$8,in_avg=$10,check_note=$11 WHERE id=$9 AND tenant_id=$1`, vals);
 
   await c.query(`DELETE FROM recipe_rows WHERE recipe_id=$1`, [rid]);
   let pos = 0;
@@ -557,7 +558,7 @@ async function tenantData(tid: string, s: Scope | null) {
     })),
     recipes: recipes.map((r) => ({
       id: r.id, name: r.name, type: r.type, portions: N(r.portions), yieldG: N(r.yield_g),
-      price: N(r.price), sold: N(r.sold), time: N(r.prep_time), inAvg: r.in_avg !== false, rows: rr.get(r.id) || [],
+      price: N(r.price), sold: N(r.sold), time: N(r.prep_time), inAvg: r.in_avg !== false, checkNote: r.check_note || '', rows: rr.get(r.id) || [],
     })),
   };
 }
