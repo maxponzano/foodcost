@@ -361,6 +361,19 @@ section("Vendite settimanali e azzeramento");
   dd = (await max.get("/data", { tenant: tA.id })).data;
   ok(r.status === 200 && dd.sales[r1]["2026-01"] === 144 && dd.sales[r1]["2026-W01"] === 44 && dd.salesGrain === "M", "importazione di un mese intero (file Excel mensile): il cliente passa a inserimento per mese");
   await max.patch("/tenant", { salesGrain: "W" }, { tenant: tA.id });
+  // voci senza ricetta: creo il piatto con il prezzo proposto dal file
+  r = await max.post("/sales/import", { period: "2026-02", rows: [
+    { name: "Crispy Ravioli", recipeId: null, qty: 12, create: { name: "CRISPY RAVIOLI", type: "PRIMI", price: 9.5 } },
+    { name: "crispy ravioli mix", recipeId: null, qty: 3, create: { name: "crispy ravioli", type: "PRIMI", price: 9 } },
+    { name: "Gelato", recipeId: null, qty: 4, create: { name: "GELATO", type: "", price: null } }] }, { tenant: tA.id });
+  dd = (await max.get("/data", { tenant: tA.id })).data;
+  const cr = dd.recipes.find((x: any) => x.name === "CRISPY RAVIOLI"), ge = dd.recipes.find((x: any) => x.name === "GELATO");
+  ok(r.status === 200 && r.data.created === 2 && cr && cr.rows.length === 0 && cr.price === 9.5 && cr.priceCheck === true && cr.type === "PRIMI", "piatto senza ricetta creato con prezzo da confermare");
+  ok(dd.sales[cr.id]["2026-02"] === 15 && ge.price === "" && ge.priceCheck === false, "due voci sullo stesso nome si sommano; senza prezzo resta da inserire");
+  ok(dd.salesAliases["crispy ravioli"] === cr.id && dd.salesAliases["gelato"] === ge.id, "abbinamento ricordato per i file successivi");
+  await max.patch("/recipes/" + cr.id, { price: 10 }, { tenant: tA.id });
+  ok((await max.get("/data", { tenant: tA.id })).data.recipes.find((x: any) => x.id === cr.id).priceCheck === false, "scrivendo il prezzo il segnale si toglie");
+  await max.patch("/tenant", { salesGrain: "W" }, { tenant: tA.id });
   await max.post("/sales/reset", { scope: "all" }, { tenant: tA.id });
   await A.put("/sales", { period: "2026-W40", items: [{ recipeId: r1, qty: 7 }] });
   await A.put("/sales", { period: "2026-09", items: [{ recipeId: r1, qty: 55 }] });

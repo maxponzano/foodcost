@@ -276,13 +276,16 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
 
   if (path === "/sales/import" && m === "POST") {
     // importazione di una settimana o di un mese dall'export della cassa (solo super admin):
-    // rows = [{name, recipeId|null, qty, ignore}]; sostituisce le vendite della settimana e ricorda gli abbinamenti
-    // (ignore = scelta esplicita "non è un piatto"; senza ricetta e senza ignore la voce resta "da assegnare")
+    // rows = [{name, recipeId|null, qty, ignore, create}]; sostituisce le vendite del periodo e ricorda gli abbinamenti
+    // ignore = scelta esplicita "non è un piatto"; create = {name,type,price}: crea un piatto senza ricetta (prezzo da confermare);
+    // senza ricetta, senza ignore e senza create la voce resta "da assegnare"
     if (!s.isSuper) throw forbidden("Solo l'amministratore può importare le vendite dalla cassa.");
     const per = parsePeriod(b.period);
     if (!per) throw bad("Periodo non valido.");
     const rows = (Array.isArray(b.rows) ? b.rows : []).slice(0, 3000).map((x: any) => ({
-      name: str(x?.name, 150).toLowerCase(), recipeId: x?.recipeId ? uuidOrNull(x.recipeId) : null, qty: numOrNull(x?.qty, 0, 1e7) || 0, ignore: x?.ignore === true, bad: x?.recipeId && !uuidOrNull(x.recipeId),
+      name: str(x?.name, 150).toLowerCase(), recipeId: x?.recipeId ? uuidOrNull(x.recipeId) : null, qty: numOrNull(x?.qty, 0, 1e7) || 0, ignore: x?.ignore === true,
+      create: x?.create && typeof x.create === "object" && str(x.create.name, 150) ? { name: str(x.create.name, 150), type: str(x.create.type, 100), price: numOrNull(x.create.price, 0, 1e6) } : null,
+      bad: x?.recipeId && !uuidOrNull(x.recipeId),
     })).filter((x: any) => x.name);
     if (rows.some((x: any) => x.bad)) throw bad("Piatto non valido.");
     const ids = [...new Set(rows.map((x: any) => x.recipeId).filter(Boolean))];
@@ -290,20 +293,38 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
       const ok = await q(`SELECT count(*) AS n FROM recipes WHERE tenant_id=$1 AND id = ANY($2::uuid[])`, [tid, ids]);
       if (Number(ok[0].n) !== ids.length) throw forbidden("Piatto non accessibile.");
     }
+    let created = 0;
     const tot = new Map<string, number>();
-    for (const x of rows) if (x.recipeId && x.qty) tot.set(x.recipeId, (tot.get(x.recipeId) || 0) + x.qty);
     await tx(async (c) => {
-      await c.query(`DELETE FROM sales WHERE tenant_id=$1 AND grain=$2 AND period=$3::date`, [tid, per.grain, per.date]);
-      for (const [rid, qty] of tot) await putSale(c, tid, rid, per, qty, "cassa");
-      for (const x of rows) {
-        if (x.recipeId || x.ignore)
-          await c.query(`INSERT INTO sales_aliases(tenant_id,cash_name,recipe_id) VALUES ($1,$2,$3)
-            ON CONFLICT (tenant_id,cash_name) DO UPDATE SET recipe_id=EXCLUDED.recipe_id`, [tid, x.name, x.recipeId]);
-        else await c.query(`DELETE FROM sales_aliases WHERE tenant_id=$1 AND cash_name=$2`, [tid, x.name]);
+      // piatti senza ricetta: se esiste già un piatto con lo stesso nome lo riuso
+      const crt = rows.filter((x: any) => !x.recipeId && x.create);
+      if (crt.length) {
+        const ex = new Map<string, string>();
+        for (const r of (await c.query(`SELECT id, lower(name) AS k FROM recipes WHERE tenant_id=$1`, [tid])).rows) if (!ex.has(r.k)) ex.set(r.k, r.id);
+        const NR = { id: [] as string[], name: [] as string[], type: [] as string[], price: [] as (number | null)[] };
+        for (const x of crt) {
+          const k = x.create.name.toLowerCase();
+          if (!ex.has(k)) { const id = randomUUID(); ex.set(k, id); NR.id.push(id); NR.name.push(x.create.name); NR.type.push(x.create.type); NR.price.push(x.create.price); }
+          x.recipeId = ex.get(k);
+        }
+        if (NR.id.length) await c.query(
+          `INSERT INTO recipes(id,tenant_id,name,type,price,price_check) SELECT u.id,$1,u.n,u.t,u.p,u.p IS NOT NULL FROM unnest($2::uuid[],$3::text[],$4::text[],$5::numeric[]) AS u(id,n,t,p)`,
+          [tid, NR.id, NR.name, NR.type, NR.price]);
+        created = NR.id.length;
       }
+      for (const x of rows) if (x.recipeId && x.qty) tot.set(x.recipeId, (tot.get(x.recipeId) || 0) + x.qty);
+      await c.query(`DELETE FROM sales WHERE tenant_id=$1 AND grain=$2 AND period=$3::date`, [tid, per.grain, per.date]);
+      if (tot.size) await c.query(
+        `INSERT INTO sales(tenant_id,recipe_id,grain,period,qty,source) SELECT $1,r,$2,$3::date,q,'cassa' FROM unnest($4::uuid[],$5::numeric[]) AS u(r,q)`,
+        [tid, per.grain, per.date, [...tot.keys()], [...tot.values()]]);
+      const keep = rows.filter((x: any) => x.recipeId || x.ignore), drop = rows.filter((x: any) => !(x.recipeId || x.ignore));
+      if (keep.length) await c.query(
+        `INSERT INTO sales_aliases(tenant_id,cash_name,recipe_id) SELECT DISTINCT ON (n) $1,n,r FROM unnest($2::text[],$3::uuid[]) AS u(n,r)
+         ON CONFLICT (tenant_id,cash_name) DO UPDATE SET recipe_id=EXCLUDED.recipe_id`, [tid, keep.map((x: any) => x.name), keep.map((x: any) => x.recipeId || null)]);
+      if (drop.length) await c.query(`DELETE FROM sales_aliases WHERE tenant_id=$1 AND cash_name = ANY($2::text[])`, [tid, drop.map((x: any) => x.name)]);
       await c.query(`UPDATE tenants SET sales_grain=$2 WHERE id=$1`, [tid, per.grain]);
     });
-    return json({ ok: true, recipes: tot.size, qty: [...tot.values()].reduce((a, v) => a + v, 0) });
+    return json({ ok: true, recipes: tot.size, created, qty: [...tot.values()].reduce((a, v) => a + v, 0) });
   }
 
   if (path === "/sales/reset" && m === "POST") {
@@ -381,6 +402,7 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
         for (const k of Object.keys(map)) if (k in b) { vals.push(numOrNull(b[k], 0, map[k][1])); sets.push(`${map[k][0]}=$${vals.length}`); }
         if (typeof b.inAvg === "boolean") { vals.push(b.inAvg); sets.push(`in_avg=$${vals.length}`); }
         if (typeof b.checkNote === "string") { vals.push(str(b.checkNote, 500)); sets.push(`check_note=$${vals.length}`); }
+        if ("price" in b || b.priceCheck === false) sets.push(`price_check=false`);   // prezzo scritto o confermato a mano
         if (sets.length) await q(`UPDATE recipes SET ${sets.join(",")} WHERE id=$1 AND tenant_id=$2`, vals);
         return json({ ok: true });
       }
@@ -438,7 +460,7 @@ async function saveRecipe(c: Queryable, tid: string, id: string | null, b: any):
   const vals = [tid, name, str(b.type, 100), numOrNull(b.portions, 0, 1e5) || 1, numOrNull(b.yieldG, 0, 1e8),
     numOrNull(b.price, 0, 1e6), numOrNull(b.sold, 0, 1e9), numOrNull(b.time, 0, 1e5), rid, b.inAvg !== false, str(b.checkNote, 500)];
   if (isNew) await c.query(`INSERT INTO recipes(tenant_id,name,type,portions,yield_g,price,sold,prep_time,id,in_avg,check_note) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, vals);
-  else await c.query(`UPDATE recipes SET name=$2,type=$3,portions=$4,yield_g=$5,price=$6,sold=$7,prep_time=$8,in_avg=$10,check_note=$11 WHERE id=$9 AND tenant_id=$1`, vals);
+  else await c.query(`UPDATE recipes SET name=$2,type=$3,portions=$4,yield_g=$5,price_check=(price_check AND price IS NOT DISTINCT FROM $6::numeric),price=$6,sold=$7,prep_time=$8,in_avg=$10,check_note=$11 WHERE id=$9 AND tenant_id=$1`, vals);
 
   await c.query(`DELETE FROM recipe_rows WHERE recipe_id=$1`, [rid]);
   let pos = 0;
@@ -558,7 +580,7 @@ async function tenantData(tid: string, s: Scope | null) {
     })),
     recipes: recipes.map((r) => ({
       id: r.id, name: r.name, type: r.type, portions: N(r.portions), yieldG: N(r.yield_g),
-      price: N(r.price), sold: N(r.sold), time: N(r.prep_time), inAvg: r.in_avg !== false, checkNote: r.check_note || '', rows: rr.get(r.id) || [],
+      price: N(r.price), sold: N(r.sold), time: N(r.prep_time), inAvg: r.in_avg !== false, checkNote: r.check_note || '', priceCheck: !!r.price_check, rows: rr.get(r.id) || [],
     })),
   };
 }
