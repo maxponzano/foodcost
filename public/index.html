@@ -280,6 +280,17 @@ details.tc summary::-webkit-details-marker{display:none}
 .trw .tl{font-size:11px;fill:var(--mut)}
 .trw .td{font-size:11px;font-weight:600;fill:var(--mut)}.trw .td.up{fill:var(--ok)}.trw .td.dn{fill:var(--bad)}
 .trw .qhit{fill:transparent;cursor:pointer}
+.trw .tgt{stroke:var(--mut);stroke-width:1.5;stroke-dasharray:4 4}.trw .fl{fill:none;stroke:var(--bar);stroke-width:2}
+.trw .fd{fill:var(--bar);stroke:var(--card);stroke-width:2}.trw .fd.over{fill:var(--bad)}
+.pcap{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;font-weight:600;margin:6px 0 2px}
+.mv-h{font-size:12px;font-weight:600;color:var(--mut);margin:8px 0 2px}
+.mv-row{display:grid;grid-template-columns:minmax(90px,38%) 1fr 92px;gap:8px;align-items:center;padding:3px 0;font-size:13px}
+.mv-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mv-t{display:grid;grid-template-columns:1fr 1fr;height:14px}.mv-n{display:flex;justify-content:flex-end;border-right:1px solid var(--mut)}.mv-p{display:flex}
+.mv-b{display:block;height:100%}.mv-b.up{background:var(--c1);border-radius:0 4px 4px 0}.mv-b.dn{background:var(--c2);border-radius:4px 0 0 4px}
+.mv-v{text-align:right;font-variant-numeric:tabular-nums;font-size:12px}
+.dm-g{margin:8px 0}.dm-l{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
+.dm-c{background:var(--chip);border-radius:999px;padding:3px 10px;font-size:13px;text-decoration:none}.dm-c em{font-style:normal;color:var(--mut);margin-left:4px}
 .grid-2{display:grid;grid-template-columns:1fr;gap:0;margin-bottom:12px}
 .gh .cnt{font-size:12px;color:var(--mut);font-weight:600;letter-spacing:0;margin-left:4px}
 .rgh:first-child{margin-top:4px}
@@ -837,7 +848,7 @@ function qTip(e){
   tip.style.display='block';tip.style.top=(cb.top+cb.height/2-wb.top)+'px';
   tip.style.left=Math.max(70,Math.min(wb.width-70,left))+'px';
 }
-window.addEventListener('resize',function(){later('rsz',function(){if(S&&route.tab==='menu'&&!route.recipe)paintMenu();if(S&&route.tab==='vendite')drawTrend()},200)});
+window.addEventListener('resize',function(){later('rsz',function(){if(S&&route.tab==='menu'&&!route.recipe)paintMenu();if(S&&route.tab==='vendite')drawSalesCharts()},200)});
 document.addEventListener('mouseover',qTip);document.addEventListener('click',qTip);
 function avgOf(a){return a.length?a.reduce(function(s,v){return s+v},0)/a.length:0}
 function paintMenu(){
@@ -1159,7 +1170,9 @@ function venditeHTML(){
   h+='<div class="kpis kpis3"><div class="kpi"><span>Piatti venduti nell'+(W?'a settimana':' mese')+'</span><b id="sv-tq"></b><em id="sv-tn"></em></div><div class="kpi"><span>Incasso (IVA escl.)</span><b id="sv-ti"></b><em>prezzo di vendita × pezzi</em></div>'
     +'<div class="kpi"><span>'+(W?'Settimane':'Mesi')+' con vendite</span><b id="sv-np"></b><em id="sv-nr"></em></div></div>'
     +trendHTML()
+    +'<div class="grid-2"><div class="card" id="prof"></div><div class="card" id="movers"></div></div>'
     +periodBarHTML(true)+'<p class="mut" style="margin:-4px 0 10px;font-size:13px">La colonna <b style="color:var(--brand)">Totale</b> somma le vendite di questo periodo: è lo stesso numero del Menù Ingegnerizzato (il periodo vale per entrambe le pagine).</p>'
+    +dormantHTML()
     +(RO?'':'<p class="mut" style="margin:12px 0 6px">Scrivi i pezzi venduti e premi <b>Invio</b> per passare al piatto successivo. Il salvataggio è automatico.</p>');
   h+=groups().map(function(g,gi){
     return'<h2 class="gh">'+esc(g.t)+' <span class="cnt" id="sg-'+gi+'"></span></h2><div class="card st"><div class="srow shead"><span>Piatto</span><span>'+(W?'Settimana':'Mese')+'</span><span>Prezzo</span><span>Incasso</span><span class="stt" title="Stesso periodo del Menù Ingegnerizzato">Totale</span></div>'
@@ -1354,7 +1367,7 @@ function trendData(){
 }
 function trendHTML(){
   var T=trCfg(),hasW=S.salesGrain==='W'||salesWeeks().length>0;
-  var sel=function(k,opts){return'<select data-keep class="csel" onchange="route.tr.'+k+'=this.value;drawTrend()">'+opts.map(function(o){return'<option value="'+esc(o[0])+'"'+(T[k]===o[0]?' selected':'')+'>'+esc(o[1])+'</option>'}).join('')+'</select>'};
+  var sel=function(k,opts){return'<select data-keep class="csel" onchange="route.tr.'+k+'=this.value;drawSalesCharts()">'+opts.map(function(o){return'<option value="'+esc(o[0])+'"'+(T[k]===o[0]?' selected':'')+'>'+esc(o[1])+'</option>'}).join('')+'</select>'};
   return'<div class="card"><div class="trh"><h3 class="ch" style="margin:0">Andamento vendite</h3><div class="trc">'
     +sel('g',(hasW?[['w','Settimana su settimana']]:[]).concat([['m','Mese su mese'],['q','Trimestre su trimestre'],['y','Anno su anno']]))
     +sel('k',[['q','Pezzi venduti'],['i','Incasso (IVA escl.)']])
@@ -1390,12 +1403,95 @@ function drawTrend(){
   el.innerHTML=sum+'<div class="trw">'+s+'</div><p class="mut cnote">Sotto ogni barra la variazione sul periodo precedente; passa sopra una barra per il confronto con lo stesso periodo dell’anno prima.'
     +(T.k==='i'?' Incasso calcolato ai prezzi di vendita attuali.':'')+(D.hidden?' Mostrati gli ultimi '+ks.length+' periodi.':'')+'</p>';
 }
+/* ---------- vendite: redditività nel tempo, piatti in crescita/calo, piatti dormienti ---------- */
+function drawSalesCharts(){drawTrend();drawProfit();drawMovers()}
+/* pezzi, incasso e costo per periodo (stessa granularità e categoria del grafico "Andamento vendite") */
+function salesSeries(){
+  var T=trCfg(),g=groups().filter(function(x){return x.t===T.cat})[0],rs=g?g.rs:S.recipes;
+  var src=T.g==='w'?(S.sales||{}):(S.msales||{}),ps=T.g==='w'?salesWeeks():salesMonths();if(!ps.length)return null;
+  var all=[],p=ps[0],step=T.g==='w'?wkAdd:mAdd;while(p<=ps[ps.length-1]){all.push(p);p=step(p,1)}
+  var C={},val={},per={};rs.forEach(function(r){C[r.id]=calcR(r)});
+  all.forEach(function(pp){
+    var k=T.g==='w'?pp:trendKey(pp,T.g);if(!val[k]){val[k]={q:0,inc:0,fc:0,np:0};per[k]={}}
+    rs.forEach(function(r){var q=(src[r.id]||{})[pp]||0;if(!q)return;var c=C[r.id];per[k][r.id]=(per[k][r.id]||0)+q;val[k].q+=q;
+      if(c.net>0&&c.ok){val[k].inc+=c.net*q;val[k].fc+=c.dose*q}else val[k].np+=q});
+  });
+  var keys=Object.keys(val).sort(),max=T.g==='w'?13:T.g==='m'?12:T.g==='q'?8:6;
+  return{T:T,keys:keys.slice(-max),all:keys,val:val,per:per,rs:rs};
+}
+function drawProfit(){
+  var el=document.getElementById('prof');if(!el)return;var D=salesSeries();
+  var head='<h3 class="ch">Margine e food cost nel tempo</h3>';
+  if(!D){el.innerHTML=head+'<p class="mut cnote">Il grafico compare quando inserisci le vendite.</p>';return}
+  var T=D.T,ks=D.keys,v=D.val,tg=S.fcTarget,W=Math.max(280,Math.min(el.clientWidth-32||520,900)),L=10,R=10,pw=W-L-R,slot=pw/ks.length,bw=Math.min(40,slot*.6);
+  var mg=function(k){return v[k].inc-v[k].fc},fp=function(k){return v[k].inc>0?v[k].fc/v[k].inc*100:null};
+  // 1) margine €: barre
+  var H1=150,T1=18,B1=22,ph1=H1-T1-B1,mx=Math.max.apply(null,ks.map(mg).concat([1]))*1.12;
+  var s1='<svg width="'+W+'" height="'+H1+'" viewBox="0 0 '+W+' '+H1+'" role="img" aria-label="Margine per periodo"><line class="ax" x1="'+L+'" y1="'+(T1+ph1)+'" x2="'+(L+pw)+'" y2="'+(T1+ph1)+'"/>';
+  ks.forEach(function(k,i){var x=L+slot*i+slot/2,m=Math.max(0,mg(k)),h=m/mx*ph1,y=T1+ph1-h,last=i===ks.length-1;
+    s1+=(m>0?'<path class="tb'+(last?' last':'')+'" d="M'+(x-bw/2)+','+(T1+ph1)+'V'+(y+4)+'q0,-4 4,-4h'+(bw-8)+'q4,0 4,4V'+(T1+ph1)+'Z"/>':'')
+      +((last||ks.length<=6)&&m>0?'<text class="tv" x="'+x+'" y="'+(y-5)+'" text-anchor="middle">'+eur0(m)+'</text>':'')
+      +'<text class="tl" x="'+x+'" y="'+(T1+ph1+15)+'" text-anchor="middle">'+trendLabel(k,T.g)+'</text>'
+      +'<rect class="qhit" x="'+(L+slot*i)+'" y="'+T1+'" width="'+slot+'" height="'+(ph1+B1)+'" data-tip="'+esc(trendLong(k,T.g)+'\nIncasso '+eur0(v[k].inc)+' · margine '+eur0(mg(k))+(fp(k)!=null?'\nFood cost '+fmtPct(fp(k)/100):'')+(v[k].np?'\n'+Math.round(v[k].np)+' pezzi di piatti senza prezzo esclusi':''))+'"/>'});
+  s1+='</svg>';
+  // 2) food cost %: linea con obiettivo
+  var H2=130,T2=14,B2=22,ph2=H2-T2-B2,fv=ks.map(fp),fx=fv.filter(function(x){return x!=null}),hi=Math.max.apply(null,fx.concat([tg]))*1.15,lo=Math.max(0,Math.min.apply(null,fx.concat([tg]))*.8);
+  var Y=function(x){return T2+ph2-(x-lo)/(hi-lo||1)*ph2},pts=[];
+  var s2='<svg width="'+W+'" height="'+H2+'" viewBox="0 0 '+W+' '+H2+'" role="img" aria-label="Food cost per periodo"><line class="ax" x1="'+L+'" y1="'+(T2+ph2)+'" x2="'+(L+pw)+'" y2="'+(T2+ph2)+'"/>'
+    +'<line class="tgt" x1="'+L+'" y1="'+Y(tg)+'" x2="'+(L+pw)+'" y2="'+Y(tg)+'"/><text class="tl" x="'+(L+pw)+'" y="'+(Y(tg)-4)+'" text-anchor="end">obiettivo '+tg+'%</text>';
+  ks.forEach(function(k,i){if(fv[i]!=null)pts.push([L+slot*i+slot/2,Y(fv[i]),fv[i],k])});
+  if(pts.length>1)s2+='<path class="fl" d="M'+pts.map(function(q){return q[0]+','+q[1]}).join('L')+'"/>';
+  pts.forEach(function(q,i){var last=i===pts.length-1;s2+='<circle class="fd'+(q[2]>tg?' over':'')+'" cx="'+q[0]+'" cy="'+q[1]+'" r="4.5"/>'
+    +(last?'<text class="tv" x="'+q[0]+'" y="'+(q[1]-9)+'" text-anchor="middle">'+fmtPct(q[2]/100)+'</text>':'')});
+  ks.forEach(function(k,i){s2+='<text class="tl" x="'+(L+slot*i+slot/2)+'" y="'+(T2+ph2+15)+'" text-anchor="middle">'+trendLabel(k,T.g)+'</text>'
+    +'<rect class="qhit" x="'+(L+slot*i)+'" y="'+T2+'" width="'+slot+'" height="'+(ph2+B2)+'" data-tip="'+esc(trendLong(k,T.g)+(fp(k)!=null?'\nFood cost '+fmtPct(fp(k)/100)+' (obiettivo '+tg+'%)':'\nNessun piatto con prezzo'))+'"/>'});
+  s2+='</svg>';
+  var lk=ks[ks.length-1],pk=ks.length>1?ks[ks.length-2]:null,dm=pk&&mg(pk)>0?(mg(lk)-mg(pk))/mg(pk):null,df=pk&&fp(pk)!=null&&fp(lk)!=null?fp(lk)-fp(pk):null;
+  el.innerHTML=head+'<p class="trs"><b>'+esc(trendLong(lk,T.g))+'</b>: margine '+eur0(mg(lk))+(dm!=null?' <span class="'+(dm>=0?'ok':'bad')+'">('+(dm>0?'+':'')+(dm*100).toFixed(1).replace('.',',')+' %)</span>':'')
+    +(fp(lk)!=null?' · food cost <span class="'+(fp(lk)>tg?'bad':'ok')+'">'+fmtPct(fp(lk)/100)+'</span>'+(df!=null?' ('+(df>0?'+':'')+df.toFixed(1).replace('.',',')+' punti)':''):'')+'</p>'
+    +'<div class="pcap">Margine (€, IVA esclusa)</div><div class="trw">'+s1+'</div><div class="pcap">Food cost % sul venduto</div><div class="trw">'+s2+'</div>'
+    +'<p class="mut cnote">Periodo e categoria come in “Andamento vendite”. Calcolato con costi e prezzi attuali delle ricette; i piatti senza prezzo sono esclusi.</p>';
+}
+function drawMovers(){
+  var el=document.getElementById('movers');if(!el)return;var D=salesSeries();
+  var head='<h3 class="ch">Piatti in crescita e in calo</h3>';
+  if(!D||D.all.length<2){el.innerHTML=head+'<p class="mut cnote">Servono le vendite di almeno due periodi da confrontare.</p>';return}
+  var T=D.T,lk=D.all[D.all.length-1],pk=D.all[D.all.length-2],now=D.per[lk],prev=D.per[pk];
+  var L=D.rs.map(function(r){var a=now[r.id]||0,b=prev[r.id]||0;return{r:r,a:a,b:b,d:a-b}}).filter(function(x){return x.d});
+  var up=L.filter(function(x){return x.d>0}).sort(function(a,b){return b.d-a.d}).slice(0,8),dn=L.filter(function(x){return x.d<0}).sort(function(a,b){return a.d-b.d}).slice(0,8);
+  if(!up.length&&!dn.length){el.innerHTML=head+'<p class="mut cnote">Nessuna variazione tra '+esc(trendLong(pk,T.g))+' e '+esc(trendLong(lk,T.g))+'.</p>';return}
+  var mx=Math.max.apply(null,up.concat(dn).map(function(x){return Math.abs(x.d)}));
+  var row=function(x){var w=Math.abs(x.d)/mx*100,p=x.b>0?' ('+(x.d>0?'+':'')+Math.round(x.d/x.b*100)+'%)':'',tip=x.r.name+'\n'+trendLong(pk,T.g)+': '+x.b+' pz → '+trendLong(lk,T.g)+': '+x.a+' pz'+(x.b>0?'\nVariazione '+(x.d>0?'+':'')+Math.round(x.d/x.b*100)+'%':'\nNuovo nel periodo');
+    return'<div class="mv-row" data-tip="'+esc(tip)+'"><div class="mv-l rlink" data-act="openrecipe" data-id="'+x.r.id+'">'+esc(x.r.name)+'</div>'
+      +'<div class="mv-t"><div class="mv-n">'+(x.d<0?'<span class="mv-b dn" style="width:'+w+'%"></span>':'')+'</div><div class="mv-p">'+(x.d>0?'<span class="mv-b up" style="width:'+w+'%"></span>':'')+'</div></div>'
+      +'<div class="mv-v">'+(x.d>0?'▲ +':'▼ ')+x.d+p+'</div></div>'};
+  el.innerHTML=head+'<p class="mut" style="margin:0 0 10px">'+esc(trendLong(lk,T.g))+' rispetto a '+esc(trendLong(pk,T.g))+(T.cat?' · '+esc(T.cat):'')+'. Pezzi in più o in meno.</p>'
+    +(up.length?'<div class="mv-h">▲ In crescita</div>'+up.map(row).join(''):'')+(dn.length?'<div class="mv-h">▼ In calo</div>'+dn.map(row).join(''):'')
+    +'<p class="mut cnote">Clicca il nome per aprire la ricetta. Periodo e categoria come in “Andamento vendite”.</p>';
+}
+/* piatti dormienti: in menu ma sotto l'1% delle vendite della loro categoria nel periodo di analisi */
+function dormantHTML(){
+  var R=periodRange(),out=[],tot=0;
+  groups().forEach(function(g){
+    var rs=g.rs.filter(function(r){return !/prepar/i.test(r.type||'')&&num(r.price)>0});if(rs.length<2)return;
+    var gt=rs.reduce(function(t,r){return t+num(r.sold)},0);if(!gt)return;tot+=gt;
+    var low=rs.filter(function(r){return num(r.sold)<gt*.01}).sort(function(a,b){return num(a.sold)-num(b.sold)});
+    if(low.length)out.push({t:g.t,gt:gt,low:low});
+  });
+  if(!tot)return'';
+  var n=out.reduce(function(t,x){return t+x.low.length},0);
+  return'<div class="card"><h3 class="ch">Piatti dormienti</h3><p class="mut" style="margin:0 0 8px">Piatti in menu (con prezzo) che fanno meno dell’1% delle vendite della loro categoria · '+esc(R.label)+'.</p>'
+    +(n?out.map(function(x){return'<div class="dm-g"><b>'+esc(x.t)+'</b> <span class="mut">('+Math.round(x.gt).toLocaleString('it-IT')+' pezzi in categoria)</span><div class="dm-l">'
+      +x.low.map(function(r){var q=num(r.sold);return'<span class="dm-c rlink" data-act="openrecipe" data-id="'+r.id+'" data-tip="'+esc(r.name+'\n'+(q?q+' pezzi · '+fmtPct(q/x.gt)+' della categoria':'nessuna vendita nel periodo'))+'">'+esc(r.name)+' <em>'+(q?q:'0')+'</em></span>'}).join('')+'</div></div>'}).join('')
+      +'<p class="mut cnote">'+n+' piatt'+(n===1?'o':'i')+' candidat'+(n===1?'o':'i')+' a uscire dal menu o a essere rilanciat'+(n===1?'o':'i')+'. Cambia il periodo con la barra qui sopra.</p>'
+      :'<p class="ok">Nessun piatto dormiente nel periodo.</p>')+'</div>';
+}
 function trendPrevKey(k,g){if(g==='w')return wkAdd(k,-1);if(g==='y')return String(+k-1);if(g==='q'){var y=+k.slice(0,4),q=+k.slice(6);return q>1?y+'-T'+(q-1):(y-1)+'-T4'}return mAdd(k,-1)}
 
 function paintSales(typing){
   var m=curSalesKey(),tq=0,ti=0,n=0;
   groups().forEach(function(g,gi){var gq=0;g.rs.forEach(function(r){var q=((S.sales||{})[r.id]||{})[m]||0,c=calcR(r),inc=c.net>0?c.net*q:0;gq+=q;tq+=q;ti+=inc;if(q)n++;setT('si-'+r.id,q&&c.net>0?eur(inc):'—');setT('st-'+r.id,num(r.sold)?num(r.sold).toLocaleString('it-IT'):'—')});setT('sg-'+gi,gq?gq.toLocaleString('it-IT')+' pezzi':'')});
-  if(typing)later('trend',drawTrend,250);else drawTrend();
+  if(typing)later('trend',drawSalesCharts,250);else drawSalesCharts();
   var W=isWk(m),ps=W?salesWeeks():salesMonths(),f=ps[0],l=ps[ps.length-1];
   setT('sv-np',ps.length);setT('sv-nr',!ps.length?(W?'nessuna':'nessuno'):W?'dalla '+(+f.slice(6))+'/'+f.slice(0,4)+' alla '+(+l.slice(6))+'/'+l.slice(0,4):mLabel(f)+' – '+mLabel(l));
   setT('sv-tq',tq.toLocaleString('it-IT'));setT('sv-tn',n+' piatti con vendite');setT('sv-ti',eur0(ti));
