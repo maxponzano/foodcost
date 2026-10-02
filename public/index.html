@@ -1181,7 +1181,7 @@ function sresetSheetHTML(){
     +'<div class="acts"><button class="pri danger" data-act="sresetgo">Sì, azzera'+(sc==='all'?' tutto':'')+'</button><button data-act="sresetclose">Annulla</button></div></div></div>';
 }
 /* ---------- importazione dall'export della cassa (CSV) ---------- */
-var CSTOP={e:1,di:1,al:1,alla:1,allo:1,ai:1,con:1,la:1,il:1,gr:1,g:1,kg:1,del:1,della:1,dello:1,dei:1,delle:1,'in':1,a:1,da:1};
+var CSTOP={p:1,e:1,di:1,al:1,alla:1,allo:1,ai:1,con:1,la:1,il:1,gr:1,g:1,kg:1,del:1,della:1,dello:1,dei:1,delle:1,'in':1,a:1,da:1};
 function cnorm(x){return String(x).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9. ]+/g,' ').trim()}
 function ctoks(x,keepNum){return cnorm(x).split(/\s+/).map(function(t){return t.replace(/\.+$/,'')}).filter(function(t){return t&&!CSTOP[t]&&(keepNum||!/^\d+$/.test(t))})}
 function clev(a,b){var m=a.length,n=b.length,d=[],i,j;for(i=0;i<=m;i++)d[i]=[i];for(j=0;j<=n;j++)d[0][j]=j;
@@ -1199,7 +1199,8 @@ function cscore(cash,rp,r){
 }
 function csuggest(cash,rp){
   // la somiglianza del reparto serve solo a scegliere tra due ricette simili, non a far passare un abbinamento debole
-  var sc=S.recipes.map(function(r){var v=cscore(cash,rp,r);return[v[0]+v[1],r,v[0]]}).sort(function(x,y){return y[0]-x[0]});
+  // i preparati (impasti, basi, "sfusi"...) non si vendono: a parità di nome vince il piatto
+  var sc=S.recipes.map(function(r){var v=cscore(cash,rp,r);return[v[0]+v[1]-(/prepar/i.test(r.type||'')?.15:0),r,v[0]]}).sort(function(x,y){return y[0]-x[0]});
   if(!sc.length||sc[0][2]<.7||(sc[1]&&sc[0][0]-sc[1][0]<.05))return null;return sc[0][1];
 }
 function parseCsv(txt,sep){
@@ -1222,9 +1223,9 @@ function cassaRows(rows,fname){
   var h=-1,col={},hn=function(x){return cnorm(x).replace(/\./g,'').replace(/\s+/g,' ')},find=function(low,re){for(var j=0;j<low.length;j++)if(re.test(low[j]))return j;return -1};
   for(var i=0;i<Math.min(rows.length,30)&&h<0;i++){
     var low=(rows[i]||[]).map(hn);
-    var ni=find(low,/^(plu|descrizione articolo|descrizione|articolo|prodotto|piatto)$/);
-    var qi=find(low,/^qta reale$/);if(qi<0)qi=find(low,/^(qta|qt|quantita|qty|pezzi|qta totale|quantita totale)$/);
-    if(ni>=0&&qi>=0){h=i;col={n:ni,q:qi,g:find(low,/^gruppo$/),r:find(low,/^(reparto|descrizione reparto)$/)}}
+    var ni=find(low,/^(plu|descrizione articolo|descrizione|articolo|prodotto|piatto|product|item|nome)$/);
+    var qi=find(low,/^qta reale$/);if(qi<0)qi=find(low,/^(qta|qt|quantita|qty|quantity|pezzi|qta totale|quantita totale)$/);
+    if(ni>=0&&qi>=0){h=i;col={n:ni,q:qi,g:find(low,/^(gruppo|group)$/),r:find(low,/^(reparto|descrizione reparto|categoria|category)$/)}}
   }
   if(h<0)throw new Error('Nel file non trovo le colonne con il nome del piatto e la quantità (es. "Plu" e "Qta"). È l’export delle vendite della cassa?');
   var dal=null,al=null;rows.slice(0,h).forEach(function(r){(r||[]).forEach(function(x,j){var k=cnorm(x);if(k==='dal')dal=cdate(r[j+1]);if(k==='al')al=cdate(r[j+1])})});
