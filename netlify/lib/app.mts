@@ -631,13 +631,13 @@ async function admin(m: string, path: string, b: any, url: URL): Promise<Respons
       SELECT t.*, (SELECT count(*) FROM recipes r WHERE r.tenant_id=t.id) AS recipe_count,
                   (SELECT count(*) FROM foods f WHERE f.tenant_id=t.id) AS food_count
       FROM tenants t ORDER BY (t.status='pending') DESC, lower(t.ragione_sociale)`);
-    const mem = await q(`SELECT m.tenant_id, m.role, u.id, u.email, u.status FROM memberships m JOIN users u ON u.id=m.user_id ORDER BY u.email`);
+    const mem = await q(`SELECT m.tenant_id, m.role, u.id, u.email, u.full_name, u.status FROM memberships m JOIN users u ON u.id=m.user_id ORDER BY u.email`);
     return json({
       tenants: ts.map((t) => ({
         id: t.id, ragione: t.ragione_sociale, tipo: t.tipo_attivita, status: t.status, plan: t.plan,
         maxRecipes: t.max_recipes, canAddFoods: t.can_add_foods, canAddRecipes: t.can_add_recipes, salesGrain: t.sales_grain === "W" ? "W" : "M",
         recipeCount: Number(t.recipe_count), foodCount: Number(t.food_count), createdAt: t.created_at,
-        admins: mem.filter((x) => x.tenant_id === t.id && x.role === "client_admin").map((x) => ({ id: x.id, email: x.email, status: x.status })),
+        admins: mem.filter((x) => x.tenant_id === t.id && x.role === "client_admin").map((x) => ({ id: x.id, email: x.email, name: x.full_name, status: x.status })),
         viewers: mem.filter((x) => x.tenant_id === t.id && x.role === "viewer").map((x) => ({ id: x.id, email: x.email, status: x.status })),
       })),
     });
@@ -663,6 +663,23 @@ async function admin(m: string, path: string, b: any, url: URL): Promise<Respons
       }
       if (b.demo) await importInto(c, tid, demoData());
       return tid;
+    });
+    return json({ ok: true, id, tempPassword: pw }, 201);
+  }
+
+  if (parts[0] === "tenants" && parts.length === 3 && parts[2] === "admins" && m === "POST") {
+    // aggiunge una persona autorizzata a lavorare sui dati di un cliente già esistente
+    const tid = needUuid(parts[1]);
+    if (!(await q(`SELECT 1 FROM tenants WHERE id=$1`, [tid])).length) throw notFound("Cliente non trovato.");
+    const email = str(b.email, 254).toLowerCase(), name = str(b.name, 120);
+    if (!EMAIL_RE.test(email)) throw bad("Inserisci un'email valida.");
+    const pw = tempPassword(), hash = await hashPassword(pw);
+    const id = await tx(async (c) => {
+      const ex = await c.query(`SELECT 1 FROM users WHERE email=$1`, [email]);
+      if (ex.rows.length) throw new HttpError(409, "EMAIL_TAKEN", "Questa email è già registrata.");
+      const u = await c.query(`INSERT INTO users(email,full_name,pw_hash,role,status,must_change_pw) VALUES ($1,$2,$3,'client_admin','active',true) RETURNING id`, [email, name, hash]);
+      await c.query(`INSERT INTO memberships(user_id,tenant_id,role) VALUES ($1,$2,'client_admin')`, [u.rows[0].id, tid]);
+      return u.rows[0].id;
     });
     return json({ ok: true, id, tempPassword: pw }, 201);
   }
@@ -706,11 +723,11 @@ async function admin(m: string, path: string, b: any, url: URL): Promise<Respons
   }
 
   if (path === "/users" && m === "GET") {
-    const us = await q(`SELECT id,email,role,status,must_change_pw,created_at FROM users WHERE role<>'super_admin' ORDER BY email`);
+    const us = await q(`SELECT id,email,full_name,role,status,must_change_pw,created_at FROM users WHERE role<>'super_admin' ORDER BY email`);
     const mem = await q(`SELECT user_id, tenant_id, role FROM memberships`);
     return json({
       users: us.map((u) => ({
-        id: u.id, email: u.email, role: u.role, status: u.status, mustChangePw: u.must_change_pw,
+        id: u.id, email: u.email, name: u.full_name, role: u.role, status: u.status, mustChangePw: u.must_change_pw,
         tenantIds: mem.filter((x) => x.user_id === u.id).map((x) => x.tenant_id),
       })),
     });
@@ -754,7 +771,6 @@ async function admin(m: string, path: string, b: any, url: URL): Promise<Respons
       return json({ ok: true });
     }
     if (parts.length === 2 && m === "DELETE") {
-      if (u.role !== "viewer") throw bad("Per eliminare un amministratore di attività elimina l'attività.");
       await q(`DELETE FROM users WHERE id=$1`, [id]);
       return json({ ok: true });
     }

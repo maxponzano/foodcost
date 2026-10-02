@@ -366,6 +366,24 @@ section("Vendite settimanali e azzeramento");
   await A.put("/sales", { period: "2026-09", items: [{ recipeId: r1, qty: 55 }] });
 }
 
+section("Persona autorizzata aggiunta a un cliente esistente");
+{
+  ok((await A.post("/admin/tenants/" + tB.id + "/admins", { name: "X", email: "x@x.it" })).status === 403, "solo il super admin aggiunge persone");
+  ok((await max.post("/admin/tenants/" + tB.id + "/admins", { name: "Mario", email: "nonvalida" })).status === 400, "email non valida → 400");
+  r = await max.post("/admin/tenants/" + tB.id + "/admins", { name: "Mario Rossi", email: "Mario.Rossi@Trattoria.it" });
+  ok(r.status === 201 && r.data.tempPassword, "persona aggiunta con password provvisoria");
+  const pw2 = r.data.tempPassword, uid2 = r.data.id;
+  ok((await max.post("/admin/tenants/" + tB.id + "/admins", { name: "Altro", email: "mario.rossi@trattoria.it" })).status === 409, "email già usata → 409");
+  const tb = (await max.get("/admin/tenants")).data.tenants.find((t: any) => t.id === tB.id);
+  ok(tb.admins.some((a: any) => a.name === "Mario Rossi" && a.email === "mario.rossi@trattoria.it"), "nome ed email visibili nella scheda cliente");
+  const M = new Agent();
+  await M.post("/login", { email: "mario.rossi@trattoria.it", password: pw2 });
+  const md = (await M.get("/data")).data;
+  ok(md && md.tenant && md.tenant.id === tB.id && md.canWrite === true, "la persona entra e può lavorare sui dati del cliente");
+  ok((await M.get("/data", { tenant: tA.id })).status === 403 || (await M.get("/data", { tenant: tA.id })).data.tenant.id !== tA.id, "ma non vede gli altri clienti");
+  ok((await max.del("/admin/users/" + uid2)).status === 200 && (await max.get("/admin/tenants")).data.tenants.find((t: any) => t.id === tB.id).admins.every((a: any) => a.id !== uid2), "il super admin può togliere la persona");
+}
+
 section("Dati di test, importazione, varie");
 r = await max.post("/admin/tenants", { ragione: "Demo", tipo: "Pizzeria", demo: true });
 const demo = r.data.id;

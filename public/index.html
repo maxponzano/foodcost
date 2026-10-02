@@ -123,6 +123,8 @@ input:disabled,select:disabled,textarea:disabled{opacity:1;color:var(--ink);back
 #toast{position:fixed;left:50%;bottom:74px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:20;max-width:90%;display:none}
 .adm .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .adm .row>*{flex:1;min-width:130px}
+.adm-row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.adm-row .sm{margin-left:6px}
+.adm-add{margin-top:10px}
 .chk{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);margin:6px 0}
 .chk input{width:auto;min-height:0}
 .tmp{background:rgba(183,121,31,.14);border:1px solid var(--warn);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:14px}
@@ -1480,7 +1482,13 @@ function tCard(t){
   var full=t.maxRecipes!=null&&t.recipeCount>=t.maxRecipes;
   return'<details class="tc"'+(ADM.open===t.id?' open':'')+' data-tid="'+t.id+'"><summary><span><b>'+esc(t.ragione)+'</b> <span class="mut">'+esc(t.tipo)+'</span></span>'
     +'<span class="right"><span class="badge '+st[1]+'">'+st[0]+'</span><br><span class="mut'+(full?' bad':'')+'">Ricette '+t.recipeCount+' / '+(t.maxRecipes==null?'∞':t.maxRecipes)+'</span></span></summary>'
-    +'<div style="margin-top:10px"><div class="sm-list">Amministratori: '+(t.admins.length?t.admins.map(function(a){return esc(a.email)+' <button class="sm" data-act="ureset" data-id="'+a.id+'" data-email="'+esc(a.email)+'">Nuova password</button>'}).join(' '):'nessuno')+'</div>'
+    +'<div style="margin-top:10px"><div class="sm-list"><b>Persone autorizzate</b> (inseriscono alimenti, ricette e vendite):'+(t.admins.length?'':' nessuna')+'</div>'
+    +t.admins.map(function(a){return'<div class="adm-row"><span>'+(a.name?'<b>'+esc(a.name)+'</b> · ':'')+esc(a.email)+(a.status==='disabled'?' <span class="badge b-bad">disattivata</span>':'')+'</span>'
+      +'<span><button class="sm" data-act="ureset" data-id="'+a.id+'" data-email="'+esc(a.email)+'">Nuova password</button>'
+      +'<button class="sm" data-act="ustatus" data-id="'+a.id+'" data-s="'+(a.status==='disabled'?'active':'disabled')+'">'+(a.status==='disabled'?'Riattiva':'Disattiva')+'</button>'
+      +'<button class="sm del" data-act="adel" data-id="'+a.id+'">Togli</button></span></div>'}).join('')
+    +'<div class="row adm-add"><label>Nome e cognome<input id="an-'+t.id+'" autocomplete="off" placeholder="es. Mario Rossi"></label><label>Email<input id="ae-'+t.id+'" type="email" autocomplete="off" placeholder="mario@ristorante.it"></label></div>'
+    +'<div style="margin:-4px 0 10px"><button class="sm" data-act="aadd" data-id="'+t.id+'">+ Aggiungi persona autorizzata</button></div>'
     +'<div class="sm-list">Visualizzatori: '+(t.viewers.length?t.viewers.map(function(v){return esc(v.email)}).join(', '):'nessuno')+' · Alimenti: '+t.foodCount+'</div>'
     +'<div class="row"><label>Ragione sociale<input id="rg-'+t.id+'" value="'+esc(t.ragione)+'"></label><label>Tipo di attività<select id="tp-'+t.id+'"><option value="">—</option>'+tenOpts(t.tipo)+'</select></label></div>'
     +'<div class="row"><label>Piano<select id="pl-'+t.id+'" onchange="document.getElementById(\'mx-'+t.id+'\').value=this.value===\'pro\'?\'\':20"><option value="basic"'+(t.plan==='basic'?' selected':'')+'>Base</option><option value="pro"'+(t.plan==='pro'?' selected':'')+'>Pro (a pagamento)</option></select></label>'
@@ -1585,6 +1593,11 @@ document.addEventListener('click',function(e){
       ADM.msg=d.tempPassword?'':'<div class="info">Cliente creato.</div>';if(d.tempPassword)tmpMsg(em,d.tempPassword);ADM.open=d.id;window.scrollTo(0,0);return admReload();
     }).catch(showErr);return}
   if(a==='ureset'){if(armed(t,'Tocca ancora per generarla'))busy(t,api('POST','/admin/users/'+id+'/reset',{})).then(function(d){tmpMsg(t.dataset.email,d.tempPassword);window.scrollTo(0,0);return admReload()}).catch(showErr);return}
+  var dtc=t.closest('details.tc');if(dtc&&ADM)ADM.open=dtc.dataset.tid;
+  if(a==='aadd'){
+    ADM.open=id;var aem=val('ae-'+id).trim();
+    busy(t,api('POST','/admin/tenants/'+id+'/admins',{name:val('an-'+id).trim(),email:aem})).then(function(d){tmpMsg(aem,d.tempPassword);window.scrollTo(0,0);return admReload()}).catch(showErr);return}
+  if(a==='adel'){if(armed(t,'Tocca ancora per togliere'))busy(t,api('DELETE','/admin/users/'+id,{})).then(admReload).catch(showErr);return}
   if(a==='ustatus'){busy(t,api('PUT','/admin/users/'+id,{status:t.dataset.s})).then(admReload).catch(showErr);return}
   if(a==='vsave'||a==='vcreate'){
     var pre=a==='vsave'?'vt-'+id+'-':'nv-t-',tids=ADM.tenants.filter(function(x){var c=document.getElementById(pre+x.id);return c&&c.checked}).map(function(x){return x.id});
