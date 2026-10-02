@@ -919,7 +919,22 @@ function riepHTML(){
       tip:x.r.name+'\nFood cost dose '+eur(x.c.dose)+' su '+eur(x.c.net)+' IVA escl.\nMargine '+eur(x.c.mg)}}),{max:Math.max(S.fcTarget*1.6,Math.min(100,bad[0].c.fcPct*100*1.05)),target:S.fcTarget,targetLabel:'obiettivo '+S.fcTarget+'%'})
       +'<p class="mut cnote">Clicca il nome per aprire la ricetta.</p>':'<p class="ok">Nessun piatto sopra l’obiettivo del '+S.fcTarget+'%. Ottimo.</p>')
     +'</div></div>';
-  return h;
+  return h+underHTML(D,A.useSold);
+}
+/* piatti sotto margine: margine % sotto l'obiettivo (100% − obiettivo food cost), ordinati per € di margine persi nel periodo */
+function underHTML(D,useSold){
+  var G=groups(),cat=route.umCat||'',g=G.filter(function(x){return x.t===cat})[0];if(!g)cat='';
+  var tm=1-S.fcTarget/100,L=D.filter(function(x){return(!g||g.rs.indexOf(x.r)>=0)&&x.c.mgPct<tm}).map(function(x){var gap=x.c.net*tm-x.c.mg;return{r:x.r,c:x.c,sold:x.sold,gap:gap,lost:gap*x.sold}});
+  var sold=L.filter(function(x){return x.sold>0}),noSold=useSold?L.length-sold.length:0,show=(useSold?sold:L).sort(function(a,b){return useSold?b.lost-a.lost:b.gap-a.gap}).slice(0,12);
+  var tot=sold.reduce(function(t,x){return t+x.lost},0);
+  var h='<div class="card"><div class="mh" style="margin-bottom:8px"><h3 class="ch" style="margin:0">Piatti sotto margine</h3><select data-keep class="csel" aria-label="Categoria" onchange="route.umCat=this.value;render()"><option value="">Tutto il menu</option>'
+    +G.map(function(x){return'<option'+(x.t===cat?' selected':'')+'>'+esc(x.t)+'</option>'}).join('')+'</select></div>';
+  if(!L.length)return h+'<p class="ok">Nessun piatto '+(cat?'di '+esc(cat)+' ':'')+'sotto il margine obiettivo del '+Math.round(tm*100)+'%. Ottimo.</p></div>';
+  h+='<p class="mut" style="margin:0 0 10px">'+L.length+' piatt'+(L.length===1?'o':'i')+(cat?' di '+esc(cat):'')+' con margine sotto il <b>'+Math.round(tm*100)+'%</b> (obiettivo food cost '+S.fcTarget+'%)'
+    +(useSold?'. Nel periodo mancano <b class="bad">'+eur0(tot)+'</b> di margine per portarli all’obiettivo.':'. Ordinati per euro mancanti a piatto (manca il venduto).')+'</p>';
+  if(show.length)h+=hbars(show.map(function(x){return{label:x.r.name,value:useSold?x.lost:x.gap,text:(useSold?eur0(x.lost):eur(x.gap))+' · margine '+fmtPct(x.c.mgPct),color:x.c.mg<0?'var(--bad)':null,act:'openrecipe',id:x.r.id,
+    tip:x.r.name+'\nMargine '+eur(x.c.mg)+' ('+fmtPct(x.c.mgPct)+') · obiettivo '+eur(x.c.net*tm)+' ('+Math.round(tm*100)+'%)\nMancano '+eur(x.gap)+' a piatto'+(useSold?' × '+Math.round(x.sold).toLocaleString('it-IT')+' venduti = '+eur0(x.lost):'')+'\nPer arrivarci: prezzo IVA incl. '+eur(x.c.dose/S.fcTarget*100*(1+S.iva/100))+' oppure food cost '+eur(x.c.net*S.fcTarget/100)}}));
+  return h+'<p class="mut cnote">'+(useSold?'Barra = margine mancante a piatto × pezzi venduti nel periodo scelto. ':'')+(noSold?noSold+' piatt'+(noSold===1?'o':'i')+' sotto margine senza vendite nel periodo non '+(noSold===1?'è mostrato':'sono mostrati')+'. ':'')+'Passa sopra una barra per prezzo o food cost che servirebbero; clicca il nome per aprire la ricetta.</p></div>';
 }
 
 /* ---------- 2. CLASSIFICA DEL MARGINE (80/20) ---------- */
