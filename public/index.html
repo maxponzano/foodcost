@@ -1274,7 +1274,10 @@ function cassaRows(rows,fname){
   var hit={};items.forEach(function(x){if(isRec(x.rid))hit[x.group]=1});
   items.forEach(function(x){if(x.st==='none'&&!hit[x.group]){x.st='skip';x.rid='-'}});
   // voci di cibo senza ricetta: diventano piatti senza ricetta (prezzo medio dal file, da confermare)
-  items.forEach(function(x){if(x.st==='none'){x.rid='+';x.st='new'}x.nprice=x.tot>0&&x.qty>0?Math.round(x.tot/x.qty*100)/100:null;x.ntype=guessType(x.group,x.rep)});
+  items.forEach(function(x){if(x.st==='none'){x.rid='+';x.st='new'}x.nprice=x.tot>0&&x.qty>0?Math.round(x.tot/x.qty*100)/100:null});
+  // tipologie già usate dai piatti riconosciuti di ogni gruppo della cassa (per scegliere tra PIZZE CLASSICHE / SEMPLICI…)
+  var gt={};items.forEach(function(x){if(isRec(x.rid)){var r=recipeById(x.rid);if(r&&r.type){var o=gt[x.group]||(gt[x.group]={});o[r.type]=(o[r.type]||0)+1}}});
+  items.forEach(function(x){if(x.rid==='+')x.ntype=guessType(x.name,x.group,x.rep,gt[x.group]||{})});
   // periodo: date "Dal/Al" nel file (settimana), altrimenti il mese scritto nel nome del file
   var per,warn='',fm=MESI_RE.exec(cnorm(fname||''));
   if(dal!=null){per=wkOfUTC(dal);if(new Date(dal).getUTCDay()!==1||(al!=null&&Math.round((al-dal)/864e5)!==6))warn='Attenzione: il periodo del file non va da lunedì a domenica. Controlla la settimana.'}
@@ -1308,10 +1311,17 @@ function cassaFile(inp){
 var IST={saved:'ricordato',auto:'proposto',none:'da assegnare',gen:'generico',mod:'variante',skip:'ignorato',manual:'scelto',new:'nuovo piatto'};
 /* tipologia dell'app dalla categoria della cassa (Pizze → PIZZE…), vuota se non la trovo */
 var TSYN={pasta:'primi',primi:'primi',secondi:'second',carne:'second',pesce:'second',dolci:'dolci',dessert:'dolci',pizze:'pizz',pizza:'pizz',pizzeria:'pizz',antipasti:'antipast',contorni:'contorn',focacce:'focacc',fritti:'fritt',panini:'panin',hamburger:'hamburg',insalate:'insalat',insalatone:'insalat',bruschette:'bruschett',taglieri:'taglier',cucina:''};
-function guessType(g,rp){
-  var ws=cnorm((g||'')+' '+(rp||'')).split(/\s+/).filter(Boolean),T=S.lists.tipologie.filter(function(t){return !/prepar/i.test(t)});
-  for(var i=0;i<ws.length;i++){var st=ws[i] in TSYN?TSYN[ws[i]]:ws[i].slice(0,5);if(!st||st.length<4)continue;var hit=T.filter(function(t){return cnorm(t).indexOf(st)>=0})[0];if(hit)return hit}
-  return'';
+function guessType(name,g,rp,used){
+  var T=S.lists.tipologie.filter(function(t){return !/prepar/i.test(t)}),best=function(L){var k=null;L.forEach(function(t){if(k==null||(used[t]||0)>(used[k]||0))k=t});return k};
+  // 1) una parola del nome che richiama una tipologia (INSALATONA → INSALATONE)
+  var nt=ctoks(name),byName=T.filter(function(t){return ctoks(t).some(function(w){return w.length>=5&&nt.some(function(a){return ctm(a,w)>=.85})})});
+  if(byName.length)return best(byName);
+  // 2) la categoria della cassa (Pizze → PIZZE…); se più tipologie vanno bene, quella più usata dai piatti riconosciuti del gruppo
+  var ws=cnorm((g||'')+' '+(rp||'')).split(/\s+/).filter(Boolean);
+  for(var i=0;i<ws.length;i++){var st=ws[i] in TSYN?TSYN[ws[i]]:ws[i].slice(0,5);if(!st||st.length<4)continue;var hit=T.filter(function(t){return cnorm(t).indexOf(st)>=0});if(hit.length)return best(hit)}
+  // 3) la tipologia nettamente prevalente tra i piatti riconosciuti dello stesso gruppo
+  var tot=0,top=null;Object.keys(used).forEach(function(t){tot+=used[t];if(!top||used[t]>used[top])top=t});
+  return top&&used[top]>=tot*.6&&T.indexOf(top)>=0?top:'';
 }
 function noRecipe(r){return!r.rows||!r.rows.length}
 function needPrice(r){return!(num(r.price)>0)||!!r.priceCheck}
