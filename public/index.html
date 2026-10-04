@@ -622,16 +622,16 @@ function counterHTML(){
     +(S.isSuper&&m!=null&&S.recipeCount>=m?' · <span class="mut">come super admin puoi superare il limite</span>':'')+'</div>';
 }
 function recipesHTML(){
-  var lk=lockRecipe(),nchk=S.recipes.filter(function(r){return r.checkNote}).length,nnr=S.recipes.filter(noRecipe).length;if(route.cat==='__norec'&&!nnr)route.cat='';if(route.cat==='__check'&&!nchk)route.cat='';
+  var lk=lockRecipe(),nchk=S.recipes.filter(function(r){return r.checkNote}).length,nnr=S.recipes.filter(noRecipe).length,sb0=subIds(),npr=S.recipes.filter(function(r){return priceTodo(r,sb0)}).length;if(route.cat==='__norec'&&!nnr||route.cat==='__noprice'&&!npr)route.cat='';if(route.cat==='__check'&&!nchk)route.cat='';
   return'<div class="bar"><input id="q" data-keep placeholder="Cerca ricetta" value="'+esc(route.q)+'" oninput="route.q=this.value;document.getElementById(\'rlist\').innerHTML=recipesList()">'
-  +'<select data-keep onchange="route.cat=this.value;render()"><option value="">Tutte le tipologie</option>'+(nchk?'<option value="__check"'+(route.cat==='__check'?' selected':'')+'>⚠ Da verificare ('+nchk+')</option>':'')+(nnr?'<option value="__norec"'+(route.cat==='__norec'?' selected':'')+'>Senza ricetta ('+nnr+')</option>':'')+S.lists.tipologie.map(function(c){return'<option'+(route.cat===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select>'
+  +'<select data-keep onchange="route.cat=this.value;render()"><option value="">Tutte le tipologie</option>'+(nchk?'<option value="__check"'+(route.cat==='__check'?' selected':'')+'>⚠ Da verificare ('+nchk+')</option>':'')+(nnr?'<option value="__norec"'+(route.cat==='__norec'?' selected':'')+'>Senza ricetta ('+nnr+')</option>':'')+(npr?'<option value="__noprice"'+(route.cat==='__noprice'?' selected':'')+'>Prezzo di vendita da sistemare ('+npr+')</option>':'')+S.lists.tipologie.map(function(c){return'<option'+(route.cat===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select>'
   +'<button class="pri'+(lk?' locked':'')+'" data-act="newrecipe">+ Ricetta</button></div>'+counterHTML()
   +(nchk&&route.cat!=='__check'?'<div class="chkbar" data-act="showcheck">⚠ <b>'+nchk+(nchk===1?' ricetta da verificare':' ricette da verificare')+'</b> <span>— mostra solo quelle</span></div>':'')
   +'<div id="lockmsg" class="lockmsg"></div><div id="rlist">'+recipesList()+'</div>';
 }
 function recipesList(){
-  var q=route.q.toLowerCase();
-  var list=S.recipes.filter(function(r){return(!q||r.name.toLowerCase().indexOf(q)>=0)&&(!route.cat||(route.cat==='__check'?!!r.checkNote:route.cat==='__norec'?noRecipe(r):r.type===route.cat))}).sort(function(a,b){return a.name.localeCompare(b.name,'it')});
+  var q=route.q.toLowerCase(),subs=subIds();
+  var list=S.recipes.filter(function(r){return(!q||r.name.toLowerCase().indexOf(q)>=0)&&(!route.cat||(route.cat==='__check'?!!r.checkNote:route.cat==='__norec'?noRecipe(r):route.cat==='__noprice'?priceTodo(r,subs):r.type===route.cat))}).sort(function(a,b){return a.name.localeCompare(b.name,'it')});
   if(!S.recipes.length)return'<div class="empty">Nessuna ricetta.'+(RO?'':'<br>Prima inserisci qualche alimento, poi tocca “+ Ricetta”.')+'</div>';
   if(!list.length)return'<div class="empty">Nessun risultato.</div>';
   // divise per tipologia, nell'ordine dell'elenco tipologie (come in Marginalità); in fondo quelle senza tipologia
@@ -641,7 +641,7 @@ function recipesList(){
   return keys.map(function(k){
     var rs=list.filter(function(r){return(order.indexOf(r.type)>=0?r.type:'')===k});
     return'<h2 class="gh rgh">'+esc(k||'Senza tipologia')+' <span class="cnt">'+rs.length+'</span></h2>'+rs.map(function(r){var t=recipeTotal(r),d=num(r.portions)||1;
-      return'<div class="card item'+(r.checkNote?' tocheck':'')+'" data-act="editrecipe" data-id="'+r.id+'"><div><b>'+esc(r.name)+'</b><span class="mut">'+r.rows.length+' ingr.'+(num(r.price)>0?' · prezzo '+eur(num(r.price)):'')+'</span>'+(r.checkNote?'<span class="chknote">⚠ Da verificare: '+esc(r.checkNote)+'</span>':'')+(noRecipe(r)?'<span class="nrline"><span class="nrb">senza ricetta</span>'+(needPrice(r)?' <span class="pchk">'+(r.priceCheck?'prezzo da confermare':'manca il prezzo')+'</span>':'')+'</span>':'')+'</div>'
+      return'<div class="card item'+(r.checkNote?' tocheck':'')+'" data-act="editrecipe" data-id="'+r.id+'"><div><b>'+esc(r.name)+'</b><span class="mut">'+r.rows.length+' ingr.'+(num(r.price)>0?' · prezzo '+eur(num(r.price)):'')+'</span>'+(r.checkNote?'<span class="chknote">⚠ Da verificare: '+esc(r.checkNote)+'</span>':'')+(noRecipe(r)||priceTodo(r,subs)?'<span class="nrline">'+(noRecipe(r)?'<span class="nrb">senza ricetta</span> ':'')+(priceTodo(r,subs)?'<span class="pchk">'+(r.priceCheck?'prezzo da confermare':'manca il prezzo di vendita')+'</span>':'')+'</span>':'')+'</div>'
       +'<div class="right"><b>'+eur(t.total/d)+'</b><span class="mut">per dose'+(t.miss?' <span class="warn">· '+t.miss+' senza prezzo</span>':'')+'</span></div></div>'}).join('');
   }).join('');
 }
@@ -735,16 +735,16 @@ function setInAvg(id,v){var r=recipeById(id);r.inAvg=v;var row=document.getEleme
 function setPrice(id,v){var r=recipeById(id);r.price=v;if(r.priceCheck){r.priceCheck=false;var pc=document.getElementById('pc-'+id);if(pc)pc.remove();var ib=document.querySelector('#mr-'+id+' input.pcheck');if(ib)ib.classList.remove('pcheck');var bt=document.querySelector('#mr-'+id+' .pok');if(bt)bt.remove()}paintMarg();later('pr'+id,function(){api('PATCH','/recipes/'+id,{price:v}).catch(showErr)})}
 function margHTML(){
   if(!S.recipes.length)return'<div class="empty">Nessuna ricetta.<br>Creale nella sezione Ricette.</div>';
-  var fix=S.recipes.filter(function(r){return noRecipe(r)&&needPrice(r)}),fc=fix.filter(function(r){return r.priceCheck}).length;
+  var subs=subIds(),fix=S.recipes.filter(function(r){return priceTodo(r,subs)}),fc=fix.filter(function(r){return r.priceCheck}).length,fm=fix.length-fc,fnr=fix.filter(noRecipe).length;
   if(route.mfix&&!fix.length)route.mfix=false;
-  return(fix.length?'<div class="chkbar"'+(route.mfix?'':' data-act="mfix"')+'>⚠ <b>'+fix.length+' piatt'+(fix.length===1?'o':'i')+' senza ricetta da sistemare</b>: '+(fc?fc+' con prezzo proposto dalla cassa da confermare':'')+(fc&&fix.length-fc?', ':'')+(fix.length-fc?(fix.length-fc)+' senza prezzo':'')
+  return(fix.length?'<div class="chkbar"'+(route.mfix?'':' data-act="mfix"')+'>⚠ <b>'+fix.length+' piatt'+(fix.length===1?'o':'i')+' con il prezzo di vendita da sistemare</b>: '+(fm?fm+' senza prezzo':'')+(fc&&fm?', ':'')+(fc?fc+' con prezzo proposto dalla cassa da confermare':'')+(fnr?' (di cui '+fnr+' senza ricetta)':'')
       +(route.mfix?' <button class="sm" data-act="mfixoff">Mostra tutti</button>':' <span>— mostra solo questi</span>')+'</div>':'')
   +(route.mfix?'':simHTML())+'<p class="mut" style="margin:0 0 6px">Inserisci il prezzo di vendita IVA inclusa: food cost e margini si calcolano da soli. Il food cost è verde fino al '+S.fcTarget+'%, arancione fino a +5 punti, poi rosso. I piatti <span class="nrb">senza ricetta</span> contano nelle vendite e negli incassi; food cost e margine compaiono quando aggiungi gli ingredienti.</p>'
-  +groups().map(function(g0,gi){var g={t:g0.t,rs:route.mfix?g0.rs.filter(function(r){return noRecipe(r)&&needPrice(r)}):g0.rs};if(!g.rs.length)return'';
+  +groups().map(function(g0,gi){var g={t:g0.t,rs:route.mfix?g0.rs.filter(function(r){return priceTodo(r,subs)}):g0.rs};if(!g.rs.length)return'';
     return'<h2 class="gh">'+esc(g.t)+'</h2><div class="card mt m6"><div class="fcchart" id="fc-'+gi+'"></div><div class="thead"><span>Piatto</span><div><span>Prezzo IVA incl.</span><span>IVA escl.</span><span>Food cost dose</span><span>Food cost %</span><span>Margine €</span><span>Margine %</span></div></div>'+g.rs.map(function(r){
       return'<div class="mrow'+(r.inAvg===false?' noavg':'')+'" id="mr-'+r.id+'"><div class="mname"><div class="mh"><b class="rlink" data-act="openrecipe" data-id="'+r.id+'" title="Apri la ricetta">'+esc(r.name)+'</b>'+(noRecipe(r)?' <span class="nrb">senza ricetta</span>':'')+'<span class="mut warn" id="mw-'+r.id+'"></span></div>'
         +'<label class="avgchk" title="Se togli la spunta, il piatto resta in elenco ma non entra nelle medie della categoria"><input type="checkbox"'+(r.inAvg===false?'':' checked')+' onchange="setInAvg(\''+r.id+'\',this.checked)"> conta nella media</label></div>'
-      +'<div class="kgrid"><label><span class="kl">Prezzo IVA incl. €'+(r.priceCheck?' <b class="pchk" id="pc-'+r.id+'">da confermare</b>':'')+'</span><input type="number" inputmode="decimal" step="0.01" class="'+(r.priceCheck?'pcheck':noRecipe(r)&&!(num(r.price)>0)?'pmiss':'')+'" value="'+esc(r.price||'')+'" oninput="setPrice(\''+r.id+'\',this.value)">'+(r.priceCheck?'<button class="sm pok" data-act="pconfirm" data-id="'+r.id+'">Conferma ✓</button>':'')+'</label>'
+      +'<div class="kgrid"><label><span class="kl">Prezzo IVA incl. €'+(r.priceCheck?' <b class="pchk" id="pc-'+r.id+'">da confermare</b>':'')+'</span><input type="number" inputmode="decimal" step="0.01" class="'+(r.priceCheck?'pcheck':!(num(r.price)>0)&&isDish(r,subs)?'pmiss':'')+'" value="'+esc(r.price||'')+'" oninput="setPrice(\''+r.id+'\',this.value)">'+(r.priceCheck?'<button class="sm pok" data-act="pconfirm" data-id="'+r.id+'">Conferma ✓</button>':'')+'</label>'
       +'<div class="kv"><span class="kl">Prezzo IVA escl.</span><b id="mn-'+r.id+'"></b></div><div class="kv"><span class="kl">Food cost dose</span><b id="mf-'+r.id+'"></b></div>'
       +'<div class="kv"><span class="kl">Food cost %</span><b id="mp-'+r.id+'"></b></div><div class="kv"><span class="kl">Margine €</span><b id="mg-'+r.id+'"></b></div><div class="kv"><span class="kl">Margine %</span><b id="mq-'+r.id+'"></b></div></div></div>';
     }).join('')+'<div class="avg" id="ma-'+gi+'"></div></div>';
@@ -1325,6 +1325,10 @@ function guessType(name,g,rp,used){
 }
 function noRecipe(r){return!r.rows||!r.rows.length}
 function needPrice(r){return!(num(r.price)>0)||!!r.priceCheck}
+/* piatti che si vendono: esclusi i preparati e le ricette usate come ingrediente di altre (impasti, basi…) */
+function subIds(){var o={};S.recipes.forEach(function(r){r.rows.forEach(function(x){if(x.subId)o[x.subId]=1})});return o}
+function isDish(r,subs){return!/prepar|condiment|semilavor|\bbasi\b/i.test(r.type||'')&&!(subs||subIds())[r.id]}
+function priceTodo(r,subs){return isDish(r,subs)&&needPrice(r)}
 function isRec(v){return v&&v!=='-'&&v!=='+'}
 function impSet(i,v){var x=route.imp.items[i];x.rid=v;x.st=v==='+'?'new':v?'manual':'none';impRefresh()}
 function impWeek(){
