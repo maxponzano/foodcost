@@ -1237,7 +1237,7 @@ function parseCsv(txt,sep){
     else f+=c}
   if(f||row.length){row.push(f);out.push(row)}return out;
 }
-function cdate(x){var m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(x||'').trim());return m?Date.UTC(+m[3],+m[2]-1,+m[1]):null}
+function cdate(x){var m=/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})$/.exec(String(x||'').trim());if(!m)return null;var y=+m[3];if(y<100)y+=2000;return Date.UTC(y,+m[2]-1,+m[1])}
 var MESI_RE=new RegExp('('+MESI.join('|')+')');
 function cassaParse(txt,fname){
   var head=txt.slice(0,3000),sep=head.split(';').length>=head.split(',').length?';':',';
@@ -1337,15 +1337,23 @@ function impWeek(){
   else{var m=isWk(I.week)?+wkMonth(I.week).slice(5,7):Math.round(num(val('imo')))||1;I.week=y+'-'+String(m).padStart(2,'0')}
   impRefresh();
 }
+/* periodo già caricato con esattamente le stesse quantità per piatto (stesso file importato due volte) */
+function impSame(I){
+  var t={},n=0;I.items.forEach(function(x){if(isRec(x.rid)&&x.qty){t[x.rid]=(t[x.rid]||0)+x.qty}});
+  var ks=Object.keys(t);if(ks.length<3)return null;var per={};
+  Object.keys(S.sales||{}).forEach(function(id){Object.keys(S.sales[id]).forEach(function(k){if(k!==I.week&&isWk(k)===isWk(I.week)){(per[k]||(per[k]={}))[id]=S.sales[id][k]}})});
+  return Object.keys(per).filter(function(k){var o=per[k],ok=Object.keys(o);return ok.length===ks.length&&ks.every(function(id){return o[id]===t[id]})})[0]||null;
+}
 function impPerLabel(k){return isWk(k)?'la settimana '+(+k.slice(6)):mLabel(k)}
-function impRefresh(){var sh=document.querySelector('#sheet .sheet'),y=sh?sh.scrollTop:0;document.getElementById('sheet').innerHTML=impSheetHTML();sh=document.querySelector('#sheet .sheet');if(sh)sh.scrollTop=y}
+function impRefresh(){clearTimeout(impRefresh.t);impRefresh.t=setTimeout(impDraw,0)}
+function impDraw(){if(!route.imp)return;var sh=document.querySelector('#sheet .sheet'),y=sh?sh.scrollTop:0;document.getElementById('sheet').innerHTML=impSheetHTML();sh=document.querySelector('#sheet .sheet');if(sh)sh.scrollTop=y}
 function impSheetHTML(){
   var I=route.imp,f=function(n){return n.toLocaleString('it-IT')},G=[],gi={};
   var opts=groups().map(function(g){return'<optgroup label="'+esc(g.t)+'">'+g.rs.map(function(r){return'<option value="'+r.id+'">'+esc(r.name)+'</option>'}).join('')+'</optgroup>'}).join('');
   I.items.forEach(function(x,i){var k=x.group||'Altro';if(!(k in gi)){gi[k]=G.length;G.push({t:k,rows:[]})}G[gi[k]].rows.push(i)});
   var mq=0,mr=0,ig=0,np=0,pq=0,nn=0,nq=0,rec={};I.items.forEach(function(x){if(isRec(x.rid)){mq+=x.qty;mr++;rec[x.rid]=1}else if(x.rid==='-')ig++;else if(x.rid==='+'){nn++;nq+=x.qty}else{np++;pq+=x.qty}});
   if(!np)I.only=false;
-  var W=isWk(I.week),wk=W?+I.week.slice(6):0,PL=impPerLabel(I.week),mix='';
+  var W=isWk(I.week),wk=W?+I.week.slice(6):0,PL=impPerLabel(I.week),mix='',dup=impSame(I);
   // avviso se lo stesso mese ha già vendite dell'altro tipo (si sommerebbero)
   Object.keys(S.sales||{}).some(function(id){return Object.keys(S.sales[id]).some(function(k){
     if(W&&!isWk(k)&&k===wkMonth(I.week)&&S.sales[id][k]>0){mix='Per '+mLabel(k)+' ci sono già vendite inserite a mese intero: si sommeranno a questa settimana.';return true}
@@ -1360,6 +1368,7 @@ function impSheetHTML(){
       +'<input id="iwy" type="number" min="2000" max="2100" value="'+I.week.slice(0,4)+'" onchange="impWeek()" aria-label="Anno">'
       +(W?'<b>'+wkDates(I.week)+'</b><span class="mut">· conta in '+mLabel(wkMonth(I.week))+'</span>':'<b style="text-transform:capitalize">'+mLabel(I.week)+'</b>')+'</div>'
     +(mix?'<p class="warn" style="margin:0 0 10px;font-size:14px">'+mix+'</p>':'')
+    +(dup?'<p class="bad" style="margin:0 0 10px;font-size:14px"><b>Attenzione:</b> questi numeri sono identici a quelli già caricati per <b>'+esc(impPerLabel(dup))+'</b>. Hai scelto lo stesso file due volte?</p>':'')
     +(I.warn?'<p class="warn" style="margin:0 0 10px;font-size:14px">'+esc(I.warn)+'</p>':'')
     +'<div class="tot" style="margin:0 0 10px"><div class="r"><span>Abbinate a una ricetta</span><b>'+mr+' voci · '+f(mq)+' pezzi su '+Object.keys(rec).length+' piatti</b></div>'
     +(nn?'<div class="r"><span><b style="color:var(--acc)">Piatti nuovi senza ricetta</b></span><b>'+nn+' voci · '+f(nq)+' pezzi</b></div><div class="mut" style="font-size:13px">Li creo con nome, tipologia e prezzo medio dal file (incasso ÷ pezzi): contano in vendite e incassi; il prezzo resta <b>da confermare</b> in Marginalità. Se uno è già una ricetta, sceglila dal menu.</div>':'')
