@@ -381,12 +381,33 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
         if (!s.isSuper) {
           if (!t.can_add_recipes)
             throw forbidden("La creazione di ricette non è abilitata per la tua attività. Contatta l'amministratore.", "RECIPES_DISABLED");
-          if (t.max_recipes != null) {
-            const n = Number((await c.query(`SELECT count(*) AS n FROM recipes WHERE tenant_id=$1`, [tid])).rows[0].n);
-            if (n >= t.max_recipes) throw forbidden(t.plan === "basic" ? LIMIT_MSG_BASIC : LIMIT_MSG_OTHER, "LIMIT_REACHED");
-          }
+          await checkRecipeLimit(c, t);
         }
         return saveRecipe(c, tid, null, b);
+      });
+      return json({ ok: true, id }, 201);
+    }
+    // duplica la versione salvata di una ricetta: permesso a parte, ma conta nel limite del piano
+    if (m === "POST" && parts.length === 3 && parts[2] === "duplicate") {
+      const src = needUuid(parts[1]);
+      const id = await tx(async (c) => {
+        const t = (await c.query(`SELECT * FROM tenants WHERE id=$1 FOR UPDATE`, [tid])).rows[0];
+        if (!s.isSuper) {
+          if (!t.can_dup_recipes)
+            throw forbidden("La duplicazione delle ricette non è abilitata per la tua attività. Contatta l'amministratore.", "DUP_DISABLED");
+          await checkRecipeLimit(c, t);
+        }
+        const nid = randomUUID();
+        const ins = await c.query(
+          `INSERT INTO recipes(id,tenant_id,name,type,portions,yield_g,price,sold,prep_time,in_avg,price_check)
+           SELECT $3,tenant_id,left(name || ' (copia)',150),type,portions,yield_g,price,NULL,prep_time,in_avg,price_check FROM recipes WHERE id=$1 AND tenant_id=$2`,
+          [src, tid, nid]);
+        if (!ins.rowCount) throw notFound("Ricetta non trovata.");
+        await c.query(
+          `INSERT INTO recipe_rows(recipe_id,food_id,sub_recipe_id,label,qty,waste_pct,position)
+           SELECT $1,food_id,sub_recipe_id,label,qty,waste_pct,position FROM recipe_rows WHERE recipe_id=$2 ORDER BY position`,
+          [nid, src]);
+        return nid;
       });
       return json({ ok: true, id }, 201);
     }
@@ -433,6 +454,13 @@ async function saveFood(c: Queryable, tid: string, id: string | null, b: any): P
   }
   if (supplier) await c.query(`INSERT INTO lists(tenant_id,kind,value) VALUES ($1,'fornitori',$2) ON CONFLICT DO NOTHING`, [tid, supplier]);
   return id!;
+}
+
+/** Limite ricette del piano (per i clienti; il super admin lo può superare). */
+async function checkRecipeLimit(c: Queryable, t: any) {
+  if (t.max_recipes == null) return;
+  const n = Number((await c.query(`SELECT count(*) AS n FROM recipes WHERE tenant_id=$1`, [t.id])).rows[0].n);
+  if (n >= t.max_recipes) throw forbidden(t.plan === "basic" ? LIMIT_MSG_BASIC : LIMIT_MSG_OTHER, "LIMIT_REACHED");
 }
 
 async function saveRecipe(c: Queryable, tid: string, id: string | null, b: any): Promise<string> {
@@ -565,7 +593,7 @@ async function tenantData(tid: string, s: Scope | null) {
   return {
     tenant: {
       id: t.id, ragione: t.ragione_sociale, tipo: t.tipo_attivita, status: t.status, plan: t.plan,
-      maxRecipes: t.max_recipes, canAddFoods: t.can_add_foods, canAddRecipes: t.can_add_recipes,
+      maxRecipes: t.max_recipes, canAddFoods: t.can_add_foods, canAddRecipes: t.can_add_recipes, canDupRecipes: t.can_dup_recipes,
     },
     canWrite: s ? s.canWrite : true,
     isSuper: s ? s.isSuper : true,
@@ -842,7 +870,7 @@ async function admin(m: string, path: string, b: any, url: URL): Promise<Respons
     return json({
       tenants: ts.map((t) => ({
         id: t.id, ragione: t.ragione_sociale, tipo: t.tipo_attivita, status: t.status, plan: t.plan,
-        maxRecipes: t.max_recipes, canAddFoods: t.can_add_foods, canAddRecipes: t.can_add_recipes, salesGrain: t.sales_grain === "W" ? "W" : "M",
+        maxRecipes: t.max_recipes, canAddFoods: t.can_add_foods, canAddRecipes: t.can_add_recipes, canDupRecipes: t.can_dup_recipes, salesGrain: t.sales_grain === "W" ? "W" : "M",
         recipeCount: Number(t.recipe_count), foodCount: Number(t.food_count), createdAt: t.created_at,
         admins: mem.filter((x) => x.tenant_id === t.id && x.role === "client_admin").map((x) => ({ id: x.id, email: x.email, name: x.full_name, status: x.status })),
         viewers: mem.filter((x) => x.tenant_id === t.id && x.role === "viewer").map((x) => ({ id: x.id, email: x.email, status: x.status })),
@@ -905,12 +933,13 @@ async function admin(m: string, path: string, b: any, url: URL): Promise<Respons
       }
       const canF = typeof b.canAddFoods === "boolean" ? b.canAddFoods : t.can_add_foods;
       const canR = typeof b.canAddRecipes === "boolean" ? b.canAddRecipes : t.can_add_recipes;
+      const canD = typeof b.canDupRecipes === "boolean" ? b.canDupRecipes : t.can_dup_recipes;
       const ragione = str(b.ragione, 200) || t.ragione_sociale;
       const tipo = "tipo" in b ? str(b.tipo, 100) : t.tipo_attivita;
       const grain = ["M", "W"].includes(b.salesGrain) ? b.salesGrain : t.sales_grain;
       await tx(async (c) => {
-        await c.query(`UPDATE tenants SET status=$2,plan=$3,max_recipes=$4,can_add_foods=$5,can_add_recipes=$6,ragione_sociale=$7,tipo_attivita=$8,sales_grain=$9 WHERE id=$1`,
-          [id, status, plan, max, canF, canR, ragione, tipo, grain]);
+        await c.query(`UPDATE tenants SET status=$2,plan=$3,max_recipes=$4,can_add_foods=$5,can_add_recipes=$6,ragione_sociale=$7,tipo_attivita=$8,sales_grain=$9,can_dup_recipes=$10 WHERE id=$1`,
+          [id, status, plan, max, canF, canR, ragione, tipo, grain, canD]);
         if (status === "approved")
           await c.query(`UPDATE users SET status='active' WHERE status='pending' AND id IN (SELECT user_id FROM memberships WHERE tenant_id=$1)`, [id]);
       });

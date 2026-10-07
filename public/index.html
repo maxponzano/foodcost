@@ -541,6 +541,12 @@ function lockRecipe(){
   if(S.tenant.maxRecipes!=null&&S.recipeCount>=S.tenant.maxRecipes)return S.tenant.plan==='basic'?LIMIT_BASIC:LIMIT_OTHER;
   return'';
 }
+function lockDup(){
+  if(!S||RO)return'Accesso in sola lettura.';if(S.isSuper)return'';
+  if(!S.tenant.canDupRecipes)return'La duplicazione delle ricette non è abilitata per la tua attività. Contatta l\'amministratore.';
+  if(S.tenant.maxRecipes!=null&&S.recipeCount>=S.tenant.maxRecipes)return S.tenant.plan==='basic'?LIMIT_BASIC:LIMIT_OTHER;
+  return'';
+}
 function showLock(m){var e=document.getElementById('lockmsg');if(e){e.textContent=m;e.scrollIntoView({block:'nearest'})}else toast(m)}
 
 /* ---------- ALIMENTI ---------- */
@@ -667,7 +673,7 @@ function recipeEditorHTML(){
   +'<div class="r" style="margin-top:8px"><span>Food cost %</span><b id="t-fc"></b></div><div class="r"><span>Margine (IVA esclusa)</span><b id="t-mg"></b></div></div>'
   +'<div id="t-comp"></div>'
   +'<div id="rerr" class="lockmsg"></div>'
-  +'<div class="acts"><button class="pri" data-act="saverecipe">Salva ricetta</button>'+(r.isNew?'':'<button data-act="dupl"'+(lockRecipe()?' class="locked"':'')+'>Duplica</button><button class="del" data-act="delrecipe">Elimina</button>')+'</div></div></div>';
+  +'<div class="acts"><button class="pri" data-act="saverecipe">Salva ricetta</button>'+(r.isNew?'':(S.isSuper||S.tenant.canDupRecipes?'<button data-act="dupl"'+(lockDup()?' class="locked"':'')+'>Duplica</button>':'')+'<button class="del" data-act="delrecipe">Elimina</button>')+'</div></div></div>';
 }
 function rowHTML(row,i){
   var ui=rowInfo(row,[route.recipe.id]),u=ui?BASEU[ui.basis]:'g';
@@ -1672,6 +1678,7 @@ function tCard(t){
     +'<div class="row"><label>Inserimento vendite<select id="sgr-'+t.id+'"><option value="M"'+(t.salesGrain==='W'?'':' selected')+'>Per mese</option><option value="W"'+(t.salesGrain==='W'?' selected':'')+'>Per settimana (numero ISO)</option></select></label><span></span></div>'
     +'<label class="chk"><input type="checkbox" id="cf-'+t.id+'"'+(t.canAddFoods?' checked':'')+'> Può inserire alimenti</label>'
     +'<label class="chk"><input type="checkbox" id="cr-'+t.id+'"'+(t.canAddRecipes?' checked':'')+'> Può creare ricette</label>'
+    +'<label class="chk"><input type="checkbox" id="cd-'+t.id+'"'+(t.canDupRecipes?' checked':'')+'> Può duplicare ricette <span class="mut">(conta nel limite ricette)</span></label>'
     +'<div class="acts"><button class="pri" data-act="tsave" data-id="'+t.id+'">Salva</button><button data-act="twork" data-id="'+t.id+'">Lavora su questo cliente</button>'
     +'<button data-act="tstatus" data-id="'+t.id+'" data-s="'+(t.status==='suspended'?'approved':'suspended')+'">'+(t.status==='suspended'?'Riattiva':'Sospendi')+'</button>'
     +'<button class="del" data-act="tdelete" data-id="'+t.id+'">Elimina cliente</button></div></div></details>';
@@ -1766,7 +1773,7 @@ document.addEventListener('click',function(e){
   if(a==='tsave'){
     ADM.open=id;var mx=val('mx-'+id);
     busy(t,api('PUT','/admin/tenants/'+id,{ragione:val('rg-'+id),tipo:val('tp-'+id),plan:val('pl-'+id),maxRecipes:mx===''?null:mx,
-      canAddFoods:document.getElementById('cf-'+id).checked,canAddRecipes:document.getElementById('cr-'+id).checked,salesGrain:val('sgr-'+id)}))
+      canAddFoods:document.getElementById('cf-'+id).checked,canAddRecipes:document.getElementById('cr-'+id).checked,canDupRecipes:document.getElementById('cd-'+id).checked,salesGrain:val('sgr-'+id)}))
       .then(function(){toast('Cliente aggiornato.');return admReload()}).then(function(){if(CUR===id)return reload()}).catch(showErr);return}
   if(a==='tdelete'){if(armed(t,'Tocca ancora: elimina tutti i suoi dati'))busy(t,api('DELETE','/admin/tenants/'+id,{})).then(function(){if(CUR===id){CUR=null;S=null;lsSet('fc:tenant',null)}return admReload()}).catch(showErr);return}
   if(a==='twork'){switchTenant(id);return}
@@ -1846,13 +1853,18 @@ document.addEventListener('click',function(e){
   else if(a==='addrow'){route.recipe.rows.push({foodId:'',subId:'',name:'',qty:'',waste:''});render();
     var inp=document.querySelectorAll('.ing .top input');if(inp.length)inp[inp.length-1].focus()}
   else if(a==='delrow'){route.recipe.rows.splice(+t.dataset.i,1);render()}
-  else if(a==='saverecipe'||a==='dupl'){
+  else if(a==='saverecipe'){
     var r=route.recipe,err2=document.getElementById('rerr');
     if(!r.name.trim()){err2.textContent='Inserisci il nome del piatto.';return}
-    var ro=recipeOut(r),req;
-    if(a==='dupl'){var ld=lockRecipe();if(ld){err2.textContent=ld;return}ro.name=ro.name+' (copia)';req=api('POST','/recipes',ro)}
-    else req=r.isNew?api('POST','/recipes',ro):api('PUT','/recipes/'+r.id,ro);
-    busy(t,req).then(function(){closeRecipe();return reload()}).catch(function(x){err2.textContent=x.message});
+    var ro=recipeOut(r);
+    busy(t,r.isNew?api('POST','/recipes',ro):api('PUT','/recipes/'+r.id,ro)).then(function(){closeRecipe();return reload()}).catch(function(x){err2.textContent=x.message});
+  }
+  else if(a==='dupl'){
+    // si duplica la versione salvata: se ci sono modifiche non salvate lo dico prima
+    var rd=route.recipe,err3=document.getElementById('rerr'),ld=lockDup(),saved=recipeById(rd.id);
+    if(ld){err3.textContent=ld;return}
+    if(saved&&JSON.stringify(recipeOut(rd))!==JSON.stringify(recipeOut(clone(saved)))){err3.textContent='Hai modifiche non salvate: premi prima Salva ricetta, poi Duplica.';return}
+    busy(t,api('POST','/recipes/'+rd.id+'/duplicate',{})).then(function(d){return reload().then(function(){var c=recipeById(d.id);if(c){route.recipe=clone(c);render();window.scrollTo(0,0);toast('Copia creata: ora puoi modificarla.')}})}).catch(function(x){err3.textContent=x.message});
   }
   else if(a==='delrecipe'){if(armed(t,'Tocca ancora per eliminare'))busy(t,api('DELETE','/recipes/'+route.recipe.id,{})).then(function(){closeRecipe();return reload()}).catch(showErr)}
   else if(a==='addlist'){var k=t.dataset.k,v=val('add-'+k).trim();if(v&&S.lists[k].indexOf(v)<0)busy(t,api('POST','/lists',{kind:k,value:v})).then(reload).catch(showErr)}

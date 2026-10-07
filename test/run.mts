@@ -179,6 +179,27 @@ await max.put("/admin/tenants/" + tB.id, { canAddFoods: true, canAddRecipes: tru
 r = await B.post("/foods", food("nuovo"));
 ok(r.status === 201, "riabilitato → creazione alimenti di nuovo possibile");
 
+section("Duplicare ricette (permesso facoltativo)");
+let dB = (await B.get("/data")).data;
+ok(dB.tenant.canDupRecipes === false, "di default un cliente non può duplicare");
+let srcB = await B.post("/recipes", recipe("DA COPIARE", [{ foodId: fB, name: "x", qty: 100, waste: 5 }]));
+r = await B.post("/recipes/" + srcB.data.id + "/duplicate", {});
+ok(r.status === 403 && r.data.error === "DUP_DISABLED", "senza permesso la duplicazione è rifiutata");
+await max.put("/admin/tenants/" + tB.id, { canDupRecipes: true, canAddRecipes: false });
+r = await B.post("/recipes/" + srcB.data.id + "/duplicate", {});
+dB = (await B.get("/data")).data;
+const cp = dB.recipes.find((x: any) => x.id === r.data?.id), or = dB.recipes.find((x: any) => x.id === srcB.data.id);
+ok(r.status === 201 && cp?.name === "DA COPIARE (copia)" && cp.rows.length === or.rows.length && cp.rows.length > 0, "con il permesso B duplica: nome “(copia)” e stessi ingredienti");
+ok(dB.tenant.canDupRecipes === true && (await B.post("/recipes", recipe("nuova"))).data.error === "RECIPES_DISABLED", "duplicare non abilita la creazione da zero");
+r = await B.post("/recipes/" + (await A.get("/data")).data.recipes[0].id + "/duplicate", {});
+ok(r.status === 404, "non si può duplicare la ricetta di un altro cliente");
+await max.put("/admin/tenants/" + tB.id, { maxRecipes: dB.recipes.length });
+r = await B.post("/recipes/" + srcB.data.id + "/duplicate", {});
+ok(r.status === 403 && r.data.error === "LIMIT_REACHED", "la copia conta nel limite ricette del piano");
+r = await max.post("/recipes/" + srcB.data.id + "/duplicate", {}, { tenant: tB.id });
+ok(r.status === 201, "il super admin duplica anche senza permesso e oltre il limite");
+await max.put("/admin/tenants/" + tB.id, { canDupRecipes: false, canAddRecipes: true, maxRecipes: 20 });
+
 /* ------------------------------------------------------------------ */
 section("Visualizzatore (test 4)");
 r = await max.post("/admin/viewers", { email: "cuoco@a.it", tenantIds: [tA.id] });
