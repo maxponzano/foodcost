@@ -123,6 +123,7 @@ input:disabled,select:disabled,textarea:disabled{opacity:1;color:var(--ink);back
 #toast{position:fixed;left:50%;bottom:74px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:20;max-width:90%;display:none}
 .adm .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .adm .row>*{flex:1;min-width:130px}
+.perms{flex-basis:100%;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;font-size:13px;padding:2px 0 4px}.perms .chk{margin:0;font-size:13px}
 .adm-row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.adm-row .sm{margin-left:6px}
 .adm-add{margin-top:10px}
 .chkbar{background:color-mix(in srgb,var(--warn) 14%,transparent);border:1px solid var(--warn);border-radius:10px;padding:8px 12px;margin:0 0 10px;font-size:14px;cursor:pointer}.chkbar span{color:var(--mut)}
@@ -541,12 +542,23 @@ function render(){
   if(route.restoreY!=null&&!route.recipe){window.scrollTo(0,route.restoreY);route.restoreY=null}
 }
 /* sola lettura: nasconde i pulsanti di modifica e blocca i campi (il server rifiuta comunque ogni scrittura) */
-var WRITE=['sreset','checkdone','bulkmode','newfood','savefood','delfood','addprice','delprice','newrecipe','saverecipe','dupl','delrecipe','addrow','delrow','addlist','dellist'];
+var WRITE=['sreset','pconfirm','checkdone','bulkmode','newfood','savefood','delfood','addprice','delprice','newrecipe','saverecipe','dupl','delrecipe','addrow','delrow','addlist','dellist'];
 function applyRO(){
-  if(!RO||!S||route.tab==='clienti')return;
-  ['app'].concat(route.food&&!route.pw?['sheet']:[]).forEach(function(id){
+  if(!S||route.tab==='clienti')return;
+  var ids=['app'].concat(route.food&&!route.pw?['sheet']:[]),keep=[];
+  if(!RO){
+    // diritti della persona: senza "modificare" alimenti, ricette e prezzi si vedono ma non si cambiano (tranne ciò che sta creando)
+    var tb=route.tab,lock=false;
+    if(!can('edit')&&['alimenti','ricette','marginalita','menu'].indexOf(tb)>=0){
+      lock=!((route.recipe&&route.recipe.isNew)||(route.food&&route.food.isNew));
+      keep=['newfood','newrecipe','dupl'];
+    }
+    if(!can('sales')&&tb==='vendite'){lock=true;keep=[]}
+    if(!lock)return;
+  }
+  ids.forEach(function(id){
     var el=document.getElementById(id);
-    el.querySelectorAll('[data-act]').forEach(function(b){if(WRITE.indexOf(b.dataset.act)>=0)b.style.display='none'});
+    el.querySelectorAll('[data-act]').forEach(function(b){if(WRITE.indexOf(b.dataset.act)>=0&&keep.indexOf(b.dataset.act)<0)b.style.display='none'});
     el.querySelectorAll('input,select,textarea').forEach(function(i){if(!i.hasAttribute('data-keep'))i.disabled=true});
   });
 }
@@ -564,16 +576,17 @@ function renderTop(){
    +'<button class="sm" data-act="pwopen">Password</button><button class="sm" data-act="logout">Esci</button>';
   el.innerHTML=h;
 }
-function lockFood(){if(!S||RO)return'Accesso in sola lettura.';if(S.isSuper||S.tenant.canAddFoods)return'';return'La creazione di alimenti non è abilitata per la tua attività. Contatta l\'amministratore.'}
+function can(k){return !!S&&!RO&&(S.isSuper||!!(S.perm&&S.perm[k]))}
+function lockFood(){if(!S||RO)return'Accesso in sola lettura.';if(can('foods'))return'';return'La creazione di alimenti non è abilitata per te. Contatta l\'amministratore.'}
 function lockRecipe(){
   if(!S||RO)return'Accesso in sola lettura.';if(S.isSuper)return'';
-  if(!S.tenant.canAddRecipes)return'La creazione di ricette non è abilitata per la tua attività. Contatta l\'amministratore.';
+  if(!can('recipes'))return'La creazione di ricette non è abilitata per te. Contatta l\'amministratore.';
   if(S.tenant.maxRecipes!=null&&S.recipeCount>=S.tenant.maxRecipes)return S.tenant.plan==='basic'?LIMIT_BASIC:LIMIT_OTHER;
   return'';
 }
 function lockDup(){
   if(!S||RO)return'Accesso in sola lettura.';if(S.isSuper)return'';
-  if(!S.tenant.canDupRecipes)return'La duplicazione delle ricette non è abilitata per la tua attività. Contatta l\'amministratore.';
+  if(!can('dup'))return'La duplicazione delle ricette non è abilitata per te. Contatta l\'amministratore.';
   if(S.tenant.maxRecipes!=null&&S.recipeCount>=S.tenant.maxRecipes)return S.tenant.plan==='basic'?LIMIT_BASIC:LIMIT_OTHER;
   return'';
 }
@@ -703,7 +716,7 @@ function recipeEditorHTML(){
   +'<div class="r" style="margin-top:8px"><span>Food cost %</span><b id="t-fc"></b></div><div class="r"><span>Margine (IVA esclusa)</span><b id="t-mg"></b></div></div>'
   +'<div id="t-comp"></div>'
   +'<div id="rerr" class="lockmsg"></div>'
-  +'<div class="acts"><button class="pri" data-act="saverecipe">Salva ricetta</button>'+(r.isNew?'':(S.isSuper||S.tenant.canDupRecipes?'<button data-act="dupl"'+(lockDup()?' class="locked"':'')+'>Duplica</button>':'')+'<button class="del" data-act="delrecipe">Elimina</button>')+'</div></div></div>';
+  +'<div class="acts"><button class="pri" data-act="saverecipe">Salva ricetta</button>'+(r.isNew?'':(can('dup')?'<button data-act="dupl"'+(lockDup()?' class="locked"':'')+'>Duplica</button>':'')+'<button class="del" data-act="delrecipe">Elimina</button>')+'</div></div></div>';
 }
 function rowHTML(row,i){
   var ui=rowInfo(row,[route.recipe.id]),u=ui?BASEU[ui.basis]:'g';
@@ -1689,6 +1702,14 @@ function adminHTML(){
     +'<div class="acts"><button class="pri" data-act="vcreate">Crea visualizzatore</button></div></div>';
   return h+'</div>';
 }
+/* diritti della singola persona autorizzata: si salvano subito al click */
+var PERMS=[['foods','Inserire alimenti'],['recipes','Creare ricette'],['dup','Duplicare ricette'],['edit','Modificare ricette e prezzi'],['sales','Inserire e azzerare vendite']];
+function permRow(tid,a){var p=a.perm||{};
+  return'<div class="perms"><span class="mut">Può:</span>'+PERMS.map(function(x){return'<label class="chk"><input type="checkbox"'+(p[x[0]]?' checked':'')+' onchange="setPerm(this,\''+tid+'\',\''+a.id+'\',\''+x[0]+'\')"> '+x[1]+'</label>'}).join('')+'</div>'}
+function setPerm(el,tid,uid,k){var o={};o[k]=el.checked;el.disabled=true;
+  api('PATCH','/admin/tenants/'+tid+'/admins/'+uid,{perm:o}).then(function(d){el.disabled=false;
+    ADM.tenants.forEach(function(t){if(t.id===tid)t.admins.forEach(function(a){if(a.id===uid)a.perm=d.perm})});toast('Diritti aggiornati.')})
+  .catch(function(e){el.disabled=false;el.checked=!el.checked;showErr(e)})}
 function tCard(t){
   var st={approved:['attivo','b-ok'],suspended:['sospeso','b-bad']}[t.status]||['in attesa','b-warn'];
   var full=t.maxRecipes!=null&&t.recipeCount>=t.maxRecipes;
@@ -1698,7 +1719,7 @@ function tCard(t){
     +t.admins.map(function(a){return'<div class="adm-row"><span>'+(a.name?'<b>'+esc(a.name)+'</b> · ':'')+esc(a.email)+(a.status==='disabled'?' <span class="badge b-bad">disattivata</span>':'')+'</span>'
       +'<span><button class="sm" data-act="ureset" data-id="'+a.id+'" data-email="'+esc(a.email)+'">Nuova password</button>'
       +'<button class="sm" data-act="ustatus" data-id="'+a.id+'" data-s="'+(a.status==='disabled'?'active':'disabled')+'">'+(a.status==='disabled'?'Riattiva':'Disattiva')+'</button>'
-      +'<button class="sm del" data-act="adel" data-id="'+a.id+'">Togli</button></span></div>'}).join('')
+      +'<button class="sm del" data-act="adel" data-id="'+a.id+'">Togli</button></span>'+permRow(t.id,a)+'</div>'}).join('')
     +'<div class="row adm-add"><label>Nome e cognome<input id="an-'+t.id+'" autocomplete="off" placeholder="es. Mario Rossi"></label><label>Email<input id="ae-'+t.id+'" type="email" autocomplete="off" placeholder="mario@ristorante.it"></label></div>'
     +'<div style="margin:-4px 0 10px"><button class="sm" data-act="aadd" data-id="'+t.id+'">+ Aggiungi persona autorizzata</button></div>'
     +'<div class="sm-list">Visualizzatori: '+(t.viewers.length?t.viewers.map(function(v){return esc(v.email)}).join(', '):'nessuno')+' · Alimenti: '+t.foodCount+'</div>'
@@ -1706,9 +1727,6 @@ function tCard(t){
     +'<div class="row"><label>Piano<select id="pl-'+t.id+'" onchange="document.getElementById(\'mx-'+t.id+'\').value=this.value===\'pro\'?\'\':20"><option value="basic"'+(t.plan==='basic'?' selected':'')+'>Base</option><option value="pro"'+(t.plan==='pro'?' selected':'')+'>Pro (a pagamento)</option></select></label>'
     +'<label>Limite ricette (vuoto = illimitato)<input type="number" inputmode="numeric" id="mx-'+t.id+'" value="'+(t.maxRecipes==null?'':t.maxRecipes)+'"></label></div>'
     +'<div class="row"><label>Inserimento vendite<select id="sgr-'+t.id+'"><option value="M"'+(t.salesGrain==='W'?'':' selected')+'>Per mese</option><option value="W"'+(t.salesGrain==='W'?' selected':'')+'>Per settimana (numero ISO)</option></select></label><span></span></div>'
-    +'<label class="chk"><input type="checkbox" id="cf-'+t.id+'"'+(t.canAddFoods?' checked':'')+'> Può inserire alimenti</label>'
-    +'<label class="chk"><input type="checkbox" id="cr-'+t.id+'"'+(t.canAddRecipes?' checked':'')+'> Può creare ricette</label>'
-    +'<label class="chk"><input type="checkbox" id="cd-'+t.id+'"'+(t.canDupRecipes?' checked':'')+'> Può duplicare ricette <span class="mut">(conta nel limite ricette)</span></label>'
     +'<div class="acts"><button class="pri" data-act="tsave" data-id="'+t.id+'">Salva</button><button data-act="twork" data-id="'+t.id+'">Lavora su questo cliente</button>'
     +'<button data-act="tstatus" data-id="'+t.id+'" data-s="'+(t.status==='suspended'?'approved':'suspended')+'">'+(t.status==='suspended'?'Riattiva':'Sospendi')+'</button>'
     +'<button class="del" data-act="tdelete" data-id="'+t.id+'">Elimina cliente</button></div></div></details>';
@@ -1803,7 +1821,7 @@ document.addEventListener('click',function(e){
   if(a==='tsave'){
     ADM.open=id;var mx=val('mx-'+id);
     busy(t,api('PUT','/admin/tenants/'+id,{ragione:val('rg-'+id),tipo:val('tp-'+id),plan:val('pl-'+id),maxRecipes:mx===''?null:mx,
-      canAddFoods:document.getElementById('cf-'+id).checked,canAddRecipes:document.getElementById('cr-'+id).checked,canDupRecipes:document.getElementById('cd-'+id).checked,salesGrain:val('sgr-'+id)}))
+      salesGrain:val('sgr-'+id)}))
       .then(function(){toast('Cliente aggiornato.');return admReload()}).then(function(){if(CUR===id)return reload()}).catch(showErr);return}
   if(a==='tdelete'){if(armed(t,'Tocca ancora: elimina tutti i suoi dati'))busy(t,api('DELETE','/admin/tenants/'+id,{})).then(function(){if(CUR===id){CUR=null;S=null;lsSet('fc:tenant',null)}return admReload()}).catch(showErr);return}
   if(a==='twork'){switchTenant(id);return}

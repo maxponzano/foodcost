@@ -11,7 +11,20 @@ import { DEFAULT_LISTS, demoData } from "./seed.mts";
    Tipi e utilità
    ===================================================================== */
 type User = { id: string; email: string; role: "super_admin" | "client_admin" | "viewer"; status: string; must_change_pw: boolean; session_ver: number };
-type Scope = { tenant: any; canWrite: boolean; isSuper: boolean };
+type Perm = { foods: boolean; recipes: boolean; dup: boolean; edit: boolean; sales: boolean };
+type Scope = { tenant: any; canWrite: boolean; isSuper: boolean; perm: Perm };
+const ALL: Perm = { foods: true, recipes: true, dup: true, edit: true, sales: true };
+const NONE: Perm = { foods: false, recipes: false, dup: false, edit: false, sales: false };
+const PERM_COLS: Record<keyof Perm, string> = { foods: "can_add_foods", recipes: "can_add_recipes", dup: "can_dup_recipes", edit: "can_edit", sales: "can_sales" };
+const permOf = (r: any): Perm => ({ foods: !!r.can_add_foods, recipes: !!r.can_add_recipes, dup: !!r.can_dup_recipes, edit: !!r.can_edit, sales: !!r.can_sales });
+const PERM_MSG: Record<keyof Perm, [string, string]> = {
+  foods: ["La creazione di alimenti non è abilitata per te. Contatta l'amministratore.", "FOODS_DISABLED"],
+  recipes: ["La creazione di ricette non è abilitata per te. Contatta l'amministratore.", "RECIPES_DISABLED"],
+  dup: ["La duplicazione delle ricette non è abilitata per te. Contatta l'amministratore.", "DUP_DISABLED"],
+  edit: ["La modifica di ricette, alimenti e prezzi non è abilitata per te. Contatta l'amministratore.", "EDIT_DISABLED"],
+  sales: ["L'inserimento delle vendite non è abilitato per te. Contatta l'amministratore.", "SALES_DISABLED"],
+};
+function need(s: Scope, k: keyof Perm) { if (!s.isSuper && !s.perm[k]) throw forbidden(PERM_MSG[k][0], PERM_MSG[k][1]); }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -219,15 +232,18 @@ async function resolveTenant(u: User, requested: string | null): Promise<Scope> 
     if (!requested) throw bad("Seleziona un cliente.", "NO_TENANT");
     const t = (await q(`SELECT * FROM tenants WHERE id=$1`, [requested]))[0];
     if (!t) throw notFound("Cliente non trovato.");
-    return { tenant: t, canWrite: true, isSuper: true };
+    return { tenant: t, canWrite: true, isSuper: true, perm: ALL };
   }
   const rows = await q(
-    `SELECT t.*, m.role AS m_role FROM memberships m JOIN tenants t ON t.id=m.tenant_id
+    `SELECT t.*, m.role AS m_role, m.can_add_foods AS m_foods, m.can_add_recipes AS m_recipes, m.can_dup_recipes AS m_dup, m.can_edit AS m_edit, m.can_sales AS m_sales
+     FROM memberships m JOIN tenants t ON t.id=m.tenant_id
      WHERE m.user_id=$1 AND t.status='approved'`, [u.id]);
   let t = requested ? rows.find((r) => r.id === requested) : rows.length === 1 ? rows[0] : null;
   if (!t) throw requested ? forbidden("Attività non accessibile.") : bad("Seleziona un'attività.", "NO_TENANT");
   // un viewer non scrive mai, anche se per errore avesse una membership diversa
-  return { tenant: t, canWrite: u.role === "client_admin" && t.m_role === "client_admin", isSuper: false };
+  const canWrite = u.role === "client_admin" && t.m_role === "client_admin";
+  const perm = canWrite ? { foods: t.m_foods, recipes: t.m_recipes, dup: t.m_dup, edit: t.m_edit, sales: t.m_sales } : NONE;
+  return { tenant: t, canWrite, isSuper: false, perm };
 }
 
 /* =====================================================================
@@ -258,6 +274,7 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
   }
 
   if (path === "/sales" && m === "PUT") {
+    need(s, "sales");
     // vendite di un mese ("AAAA-MM") o di una settimana ISO ("AAAA-Wnn"): [{recipeId, qty}]; qty vuoto o 0 = cancella
     const per = parsePeriod(b.period);
     if (!per) throw bad("Periodo non valido.");
@@ -328,6 +345,7 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
   }
 
   if (path === "/sales/reset" && m === "POST") {
+    need(s, "sales");
     // azzera le vendite: di un solo periodo oppure tutte (scope "all")
     if (b.scope === "all") {
       const r = await q(`DELETE FROM sales WHERE tenant_id=$1 RETURNING 1`, [tid]);
@@ -350,6 +368,7 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
 
   if (parts[0] === "foods") {
     if (m === "PATCH" && parts.length === 1) {
+      need(s, "edit");
       // cambio massivo del prezzo da usare (minimo/medio/massimo/ultimo), solo sugli alimenti di questo cliente
       const mode = String(b.mode || "");
       if (!["min", "avg", "max", "last"].includes(mode)) throw bad("Prezzo da usare non valido.");
@@ -359,8 +378,7 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
       return json({ ok: true, updated: r.length });
     }
     if (m === "POST" && parts.length === 1) {
-      if (!s.isSuper && !s.tenant.can_add_foods)
-        throw forbidden("La creazione di alimenti non è abilitata per la tua attività. Contatta l'amministratore.", "FOODS_DISABLED");
+      need(s, "foods");
       const id = await tx((c) => saveFood(c, tid, null, b));
       return json({ ok: true, id }, 201);
     }
@@ -368,6 +386,7 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
       const id = needUuid(parts[1]);
       const own = await q(`SELECT 1 FROM foods WHERE id=$1 AND tenant_id=$2`, [id, tid]);
       if (!own.length) throw notFound("Alimento non trovato.");
+      if (m !== "GET") need(s, "edit");
       if (m === "PUT") { await tx((c) => saveFood(c, tid, id, b)); return json({ ok: true, id }); }
       if (m === "DELETE") { await q(`DELETE FROM foods WHERE id=$1 AND tenant_id=$2`, [id, tid]); return json({ ok: true }); }
     }
@@ -379,8 +398,7 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
         // blocco la riga del cliente: due creazioni in parallelo non superano il limite
         const t = (await c.query(`SELECT * FROM tenants WHERE id=$1 FOR UPDATE`, [tid])).rows[0];
         if (!s.isSuper) {
-          if (!t.can_add_recipes)
-            throw forbidden("La creazione di ricette non è abilitata per la tua attività. Contatta l'amministratore.", "RECIPES_DISABLED");
+          need(s, "recipes");
           await checkRecipeLimit(c, t);
         }
         return saveRecipe(c, tid, null, b);
@@ -393,8 +411,7 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
       const id = await tx(async (c) => {
         const t = (await c.query(`SELECT * FROM tenants WHERE id=$1 FOR UPDATE`, [tid])).rows[0];
         if (!s.isSuper) {
-          if (!t.can_dup_recipes)
-            throw forbidden("La duplicazione delle ricette non è abilitata per la tua attività. Contatta l'amministratore.", "DUP_DISABLED");
+          need(s, "dup");
           await checkRecipeLimit(c, t);
         }
         const nid = randomUUID();
@@ -415,6 +432,7 @@ async function tenantRoutes(m: string, path: string, b: any, s: Scope): Promise<
       const id = needUuid(parts[1]);
       const own = await q(`SELECT 1 FROM recipes WHERE id=$1 AND tenant_id=$2`, [id, tid]);
       if (!own.length) throw notFound("Ricetta non trovata.");
+      if (m !== "GET") need(s, "edit");
       if (m === "PUT") { await tx((c) => saveRecipe(c, tid, id, b)); return json({ ok: true, id }); }
       if (m === "PATCH") {
         // campi rapidi da Marginalità e Menu engineering
@@ -596,6 +614,7 @@ async function tenantData(tid: string, s: Scope | null) {
       maxRecipes: t.max_recipes, canAddFoods: t.can_add_foods, canAddRecipes: t.can_add_recipes, canDupRecipes: t.can_dup_recipes,
     },
     canWrite: s ? s.canWrite : true,
+    perm: s ? s.perm : ALL,
     isSuper: s ? s.isSuper : true,
     iva: Number(t.iva), fcTarget: Number(t.fc_target), salesGrain: t.sales_grain === "W" ? "W" : "M",
     recipeCount: recipes.length,
@@ -866,13 +885,13 @@ async function admin(m: string, path: string, b: any, url: URL): Promise<Respons
       SELECT t.*, (SELECT count(*) FROM recipes r WHERE r.tenant_id=t.id) AS recipe_count,
                   (SELECT count(*) FROM foods f WHERE f.tenant_id=t.id) AS food_count
       FROM tenants t ORDER BY (t.status='pending') DESC, lower(t.ragione_sociale)`);
-    const mem = await q(`SELECT m.tenant_id, m.role, u.id, u.email, u.full_name, u.status FROM memberships m JOIN users u ON u.id=m.user_id ORDER BY u.email`);
+    const mem = await q(`SELECT m.*, u.id, u.email, u.full_name, u.status FROM memberships m JOIN users u ON u.id=m.user_id ORDER BY u.email`);
     return json({
       tenants: ts.map((t) => ({
         id: t.id, ragione: t.ragione_sociale, tipo: t.tipo_attivita, status: t.status, plan: t.plan,
         maxRecipes: t.max_recipes, canAddFoods: t.can_add_foods, canAddRecipes: t.can_add_recipes, canDupRecipes: t.can_dup_recipes, salesGrain: t.sales_grain === "W" ? "W" : "M",
         recipeCount: Number(t.recipe_count), foodCount: Number(t.food_count), createdAt: t.created_at,
-        admins: mem.filter((x) => x.tenant_id === t.id && x.role === "client_admin").map((x) => ({ id: x.id, email: x.email, name: x.full_name, status: x.status })),
+        admins: mem.filter((x) => x.tenant_id === t.id && x.role === "client_admin").map((x) => ({ id: x.id, email: x.email, name: x.full_name, status: x.status, perm: permOf(x) })),
         viewers: mem.filter((x) => x.tenant_id === t.id && x.role === "viewer").map((x) => ({ id: x.id, email: x.email, status: x.status })),
       })),
     });
@@ -917,6 +936,18 @@ async function admin(m: string, path: string, b: any, url: URL): Promise<Respons
       return u.rows[0].id;
     });
     return json({ ok: true, id, tempPassword: pw }, 201);
+  }
+
+  if (parts[0] === "tenants" && parts.length === 4 && parts[2] === "admins" && m === "PATCH") {
+    // diritti di una persona autorizzata su questo cliente: { perm: { foods, recipes, dup, edit, sales } } (solo i campi passati)
+    const tid = needUuid(parts[1]), uid = needUuid(parts[3]);
+    const sets: string[] = [], vals: unknown[] = [uid, tid];
+    for (const k of Object.keys(PERM_COLS) as (keyof Perm)[])
+      if (typeof b.perm?.[k] === "boolean") { vals.push(b.perm[k]); sets.push(`${PERM_COLS[k]}=$${vals.length}`); }
+    if (!sets.length) throw bad("Nessun diritto da cambiare.");
+    const r = await q(`UPDATE memberships SET ${sets.join(",")} WHERE user_id=$1 AND tenant_id=$2 AND role='client_admin' RETURNING *`, vals);
+    if (!r.length) throw notFound("Persona non trovata in questo cliente.");
+    return json({ ok: true, perm: permOf(r[0]) });
   }
 
   if (parts[0] === "tenants" && parts.length === 2) {
