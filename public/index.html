@@ -361,6 +361,36 @@ details.tc summary::-webkit-details-marker{display:none}
 <main id="app"></main>
 <div id="sheet"></div>
 <div id="toast"></div>
+<script>
+/* Il badge "Powered by Netlify" (o altri elementi fissi aggiunti dall'hosting) non deve coprire il menu in basso:
+   ogni elemento fisso che non è dell'app e si sovrappone al menu viene alzato sopra di esso. */
+(function(){
+  var OWN={HEADER:1,NAV:1,MAIN:1,SCRIPT:1,STYLE:1,LINK:1,NOSCRIPT:1,TEMPLATE:1},IDS={sheet:1,toast:1,work:1,ctip:1};
+  function fixedIn(el,out,d){
+    if(!el||el.nodeType!==1||d>3)return;
+    var cs=getComputedStyle(el);
+    if(cs.position==='fixed'||cs.position==='sticky'){out.push(el);return}
+    var kids=el.shadowRoot?el.shadowRoot.children:el.children;
+    for(var i=0;i<kids.length&&i<20;i++)fixedIn(kids[i],out,d+1);
+  }
+  function lift(){
+    var nav=document.querySelector('nav');if(!nav)return;
+    var top=nav.getBoundingClientRect().top,h=window.innerHeight-top,els=[];
+    [].slice.call(document.body.children).concat([].slice.call(document.documentElement.children)).forEach(function(el){
+      if(OWN[el.tagName]||IDS[el.id]||el===document.body||el.tagName==='HEAD')return;
+      fixedIn(el,els,0);
+    });
+    els.forEach(function(el){
+      var r=el.getBoundingClientRect();
+      if(r.height>0&&r.height<160&&r.bottom>top+1)el.style.setProperty('bottom',(h+8)+'px','important');
+    });
+  }
+  var t;function later(){clearTimeout(t);t=setTimeout(lift,150)}
+  new MutationObserver(later).observe(document.documentElement,{childList:true,subtree:false});
+  document.addEventListener('DOMContentLoaded',function(){new MutationObserver(later).observe(document.body,{childList:true});later()});
+  window.addEventListener('resize',later);window.addEventListener('load',function(){later();setTimeout(lift,1500);setTimeout(lift,5000)});
+})();
+</script>
 
 
 <script>
