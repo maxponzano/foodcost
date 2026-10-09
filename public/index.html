@@ -517,7 +517,7 @@ function render(){
   document.body.classList.toggle('authed',!!ME);
   if(!ME){renderAuth();return}
   renderTop();
-  document.querySelectorAll('nav button').forEach(function(b){b.classList.toggle('on',b.dataset.tab===route.tab&&!route.recipe)});
+  document.querySelectorAll('nav button').forEach(function(b){b.classList.toggle('on',b.dataset.tab===route.tab)});
   var nc=document.getElementById('nav-clienti');nc.hidden=!isSuper();
   if(isSuper()){var pend=ME.tenants.filter(function(t){return t.status==='pending'}).length;nc.textContent='Clienti'+(pend?' ('+pend+')':'')}
   subt();
