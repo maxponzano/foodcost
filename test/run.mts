@@ -512,6 +512,32 @@ r = await A.call("POST", "/lists", "kind=reparti", { headers: { "content-type": 
 ok(r.status === 400, "richiesta non JSON rifiutata");
 ok(!allBodies.some((b) => b.includes("pw_hash") || b.includes("$2b$") || b.includes("$2a$")), "nessuna risposta contiene hash di password");
 
+section("Registro attività dei clienti");
+{
+  const before = (await max.get("/admin/activity")).data.rows.length;
+  await A.get("/data"); await A.get("/data");
+  let act = (await max.get("/admin/activity?tenant=" + tA.id)).data;
+  ok(act.rows.filter((x: any) => x.action === "Accesso").length >= 1, "l'accesso del cliente è registrato");
+  const ra = (await A.post("/recipes", recipe("RICETTA LOG"))).data.id;
+  await A.patch("/recipes/" + ra, { price: 10 }); await A.patch("/recipes/" + ra, { price: 11 });
+  await A.put("/sales", { period: "2026-03", rows: [{ recipeId: ra, qty: 1 }] }); await A.put("/sales", { period: "2026-03", rows: [{ recipeId: ra, qty: 2 }] });
+  await A.del("/recipes/" + ra);
+  await max.post("/recipes", recipe("FATTA DA MAX"), { tenant: tA.id });
+  act = (await max.get("/admin/activity?tenant=" + tA.id)).data;
+  const mine = act.rows.filter((x: any) => x.detail.includes("RICETTA LOG") || x.detail === "marzo 2026");
+  ok(mine.some((x: any) => x.action === "Ricetta creata") && mine.some((x: any) => x.action === "Ricetta eliminata" && x.detail === "RICETTA LOG"), "creazione ed eliminazione con il nome della ricetta");
+  ok(mine.filter((x: any) => x.action === "Prezzo di vendita modificato").length === 1 && mine.filter((x: any) => x.action === "Vendite inserite").length === 1, "salvataggi ripetuti (prezzo, vendite) diventano una sola riga");
+  ok(!act.rows.some((x: any) => x.detail === "FATTA DA MAX"), "le azioni del super admin non si registrano");
+  ok(act.rows.every((x: any) => x.tenantId === tA.id) && act.rows[0].user, "filtro per cliente, con nome della persona");
+  const uA = act.rows[0].userId;
+  ok((await max.get("/admin/activity?user=" + uA)).data.rows.every((x: any) => x.userId === uA), "filtro per persona");
+  ok((await max.get("/admin/activity?from=2000-01-01&to=2000-01-02")).data.rows.length === 0, "filtro per date");
+  const sm = (await max.get("/admin/activity")).data.summary.find((x: any) => x.id === tA.id);
+  ok(sm.lastAccess && sm.acts30 >= 3, "riepilogo per cliente: ultimo accesso e attività degli ultimi 30 giorni");
+  ok((await A.get("/admin/activity")).status === 403, "un cliente non vede il registro");
+  ok((await max.get("/admin/activity")).data.rows.length > before, "il registro cresce");
+}
+
 section("Limitazione tentativi di login");
 const R = new Agent("10.9.9.9");
 let last;

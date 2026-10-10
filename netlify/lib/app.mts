@@ -86,7 +86,11 @@ export async function handle(req: Request, ip = ""): Promise<Response> {
     // --- da qui serve la sessione ---
     const user = await currentUser(req);
     if (path === "/me" && m === "GET") return json(await me(user));
-    if (path === "/password" && m === "POST") return await changePassword(user, body);
+    if (path === "/password" && m === "POST") {
+      const res = await changePassword(user, body);
+      if (user.role !== "super_admin") await logAct(user, null, req, { action: "Password cambiata", detail: "" });
+      return res;
+    }
 
     if (path.startsWith("/admin/")) {
       if (user.role !== "super_admin") throw forbidden("Area riservata all'amministratore.");
@@ -95,13 +99,96 @@ export async function handle(req: Request, ip = ""): Promise<Response> {
 
     const scope = await resolveTenant(user, url.searchParams.get("tenant") || req.headers.get("x-tenant-id"));
     if (m !== "GET" && !scope.canWrite) throw forbidden("Accesso in sola lettura.", "READ_ONLY");
-    return await tenantRoutes(m, path, body, scope);
+    // registro attività: solo clienti; la descrizione si prepara prima (per le eliminazioni serve il nome)
+    const act = user.role !== "super_admin" ? await describeAct(m, path, body, scope.tenant.id).catch(() => null) : null;
+    const res = await tenantRoutes(m, path, body, scope);
+    if (act && res.status < 300) await logAct(user, scope.tenant.id, req, act);
+    return res;
   } catch (e: any) {
     if (e instanceof HttpError) return json({ error: e.code, message: e.message }, e.status);
     if (e?.code === "23505") return json({ error: "DUPLICATE", message: "Esiste già un elemento con questo nome." }, 409);
     console.error(e);
     return json({ error: "SERVER", message: "Errore del server. Riprova." }, 500);
   }
+}
+
+/* =====================================================================
+   Registro attività dei clienti
+   ===================================================================== */
+type Act = { action: string; detail: string; key?: string; once?: boolean };
+const MESI_IT = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
+function perLabel(p: unknown): string {
+  const x = String(p || "");
+  let mm = /^(\d{4})-W(\d{2})$/.exec(x);
+  if (mm) return `settimana ${+mm[2]} del ${mm[1]}`;
+  mm = /^(\d{4})-(\d{2})$/.exec(x);
+  return mm ? `${MESI_IT[+mm[2] - 1]} ${mm[1]}` : x;
+}
+function deviceOf(req: Request): string {
+  const ua = req.headers.get("user-agent") || "";
+  if (/iPad|Tablet/i.test(ua)) return "tablet";
+  if (/Mobi|Android|iPhone/i.test(ua)) return "telefono";
+  return ua ? "computer" : "";
+}
+const LIST_NAME: Record<string, string> = { reparti: "reparto", fornitori: "fornitore", tipologie: "tipologia" };
+async function nameOf(table: "foods" | "recipes", id: string | undefined, tid: string): Promise<string> {
+  if (!id || !UUID_RE.test(id)) return "";
+  return (await q(`SELECT name FROM ${table} WHERE id=$1 AND tenant_id=$2`, [id, tid]))[0]?.name || "";
+}
+/** Descrive in parole un'operazione del cliente; null = non si registra. */
+async function describeAct(m: string, path: string, b: any, tid: string): Promise<Act | null> {
+  const p = path.split("/").filter(Boolean);
+  if (path === "/data" && m === "GET") return { action: "Accesso", detail: "", once: true };
+  if (m === "GET") return null;
+  if (path === "/sales" && m === "PUT") return { action: "Vendite inserite", detail: perLabel(b.period), key: "sales:" + b.period };
+  if (path === "/sales/reset") return { action: "Vendite azzerate", detail: b.scope === "all" ? "tutti i periodi" : perLabel(b.period) };
+  if (path === "/tenant") return { action: "Impostazioni modificate", detail: "Dati del locale", key: "tenant" };
+  if (path === "/lists") return { action: m === "POST" ? "Elenco: aggiunto" : "Elenco: tolto", detail: `${LIST_NAME[b.kind] || b.kind} ${str(b.value, 100)}` };
+  if (p[0] === "foods") {
+    if (p.length === 1 && m === "POST") return { action: "Alimento creato", detail: str(b.name, 150) };
+    if (p.length === 1 && m === "PATCH") return { action: "Prezzo da usare cambiato", detail: `${Array.isArray(b.ids) ? b.ids.length : 0} alimenti` };
+    if (p.length === 2 && m === "PUT") return { action: "Alimento modificato", detail: str(b.name, 150) || (await nameOf("foods", p[1], tid)), key: "food:" + p[1] };
+    if (p.length === 2 && m === "DELETE") return { action: "Alimento eliminato", detail: await nameOf("foods", p[1], tid) };
+  }
+  if (p[0] === "recipes") {
+    if (p.length === 1 && m === "POST") return { action: "Ricetta creata", detail: str(b.name, 150) };
+    if (p.length === 3 && p[2] === "duplicate") return { action: "Ricetta duplicata", detail: await nameOf("recipes", p[1], tid) };
+    if (p.length === 2) {
+      const n = await nameOf("recipes", p[1], tid);
+      if (m === "PUT") return { action: "Ricetta modificata", detail: str(b.name, 150) || n, key: "recipe:" + p[1] };
+      if (m === "DELETE") return { action: "Ricetta eliminata", detail: n };
+      if (m === "PATCH") {
+        if ("price" in b) return { action: "Prezzo di vendita modificato", detail: n, key: "price:" + p[1] };
+        if (b.priceCheck === false) return { action: "Prezzo confermato", detail: n };
+        if (typeof b.checkNote === "string") return { action: b.checkNote ? "Nota da verificare scritta" : "Ricetta segnata verificata", detail: n };
+        if (typeof b.inAvg === "boolean") return { action: b.inAvg ? "Ricetta inclusa nelle medie" : "Ricetta esclusa dalle medie", detail: n };
+        return { action: "Menù ingegnerizzato modificato", detail: n, key: "menu:" + p[1] };
+      }
+    }
+  }
+  return null;
+}
+/** Scrive una riga di registro. Con "key", le ripetizioni entro 30 minuti aggiornano la riga invece di aggiungerne
+ *  (le vendite e i prezzi si salvano a ogni tasto); con "once" la ripetizione si ignora (accessi). Mai bloccante. */
+async function logAct(u: User, tid: string | null, req: Request, a: Act) {
+  try {
+    if (a.once) {
+      // un nuovo accesso solo se la persona non ha fatto niente su questo locale negli ultimi 30 minuti
+      const recent = await q(`SELECT 1 FROM activity_log WHERE user_id=$1 AND tenant_id IS NOT DISTINCT FROM $2 AND at > NOW() - INTERVAL '30 minutes' LIMIT 1`, [u.id, tid]);
+      if (recent.length) return;
+    } else if (a.key) {
+      const prev = await q(
+        `SELECT id FROM activity_log WHERE user_id=$1 AND tenant_id IS NOT DISTINCT FROM $2 AND ckey=$3 AND at > NOW() - INTERVAL '30 minutes' ORDER BY at DESC LIMIT 1`,
+        [u.id, tid, a.key]);
+      if (prev.length) {
+        await q(`UPDATE activity_log SET at=NOW(), detail=$2 WHERE id=$1`, [prev[0].id, a.detail]);
+        return;
+      }
+    }
+    const label = (await q(`SELECT COALESCE(NULLIF(full_name,''), email) AS l FROM users WHERE id=$1`, [u.id]))[0]?.l || u.email;
+    await q(`INSERT INTO activity_log(user_id,user_label,tenant_id,action,detail,device,ckey) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [u.id, label, tid, a.action, a.detail.slice(0, 300), deviceOf(req), a.key || null]);
+  } catch (e) { console.error("registro attività", e); }
 }
 
 /* =====================================================================
@@ -472,6 +559,34 @@ async function saveFood(c: Queryable, tid: string, id: string | null, b: any): P
   }
   if (supplier) await c.query(`INSERT INTO lists(tenant_id,kind,value) VALUES ($1,'fornitori',$2) ON CONFLICT DO NOTHING`, [tid, supplier]);
   return id!;
+}
+
+/** Registro attività per il super admin: righe filtrate + riepilogo per cliente. Pulisce oltre 12 mesi. */
+async function activity(url: URL) {
+  await q(`DELETE FROM activity_log WHERE at < NOW() - INTERVAL '12 months'`);
+  const sp = url.searchParams, where: string[] = [], vals: unknown[] = [];
+  const add = (sql: string, v: unknown) => { vals.push(v); where.push(sql.replace("?", "$" + vals.length)); };
+  const tenant = sp.get("tenant"), user = sp.get("user"), from = sp.get("from"), to = sp.get("to");
+  if (tenant && UUID_RE.test(tenant)) add("a.tenant_id=?", tenant);
+  if (user && UUID_RE.test(user)) add("a.user_id=?", user);
+  if (from && /^\d{4}-\d{2}-\d{2}$/.test(from)) add("a.at >= (?::date)::timestamptz", from);
+  if (to && /^\d{4}-\d{2}-\d{2}$/.test(to)) add("a.at < (?::date + 1)::timestamptz", to);
+  const rows = await q(
+    `SELECT a.id, a.at, a.user_id, a.user_label, a.tenant_id, t.ragione_sociale AS tenant, a.action, a.detail, a.device
+     FROM activity_log a LEFT JOIN tenants t ON t.id=a.tenant_id
+     ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY a.at DESC, a.id DESC LIMIT 1001`, vals);
+  const summary = await q(
+    `SELECT t.id, t.ragione_sociale AS tenant,
+       (SELECT max(at) FROM activity_log a WHERE a.tenant_id=t.id AND a.action='Accesso') AS last_access,
+       (SELECT user_label FROM activity_log a WHERE a.tenant_id=t.id AND a.action='Accesso' ORDER BY at DESC LIMIT 1) AS last_user,
+       (SELECT count(*) FROM activity_log a WHERE a.tenant_id=t.id AND a.action='Accesso' AND a.at > NOW() - INTERVAL '30 days') AS access30,
+       (SELECT count(*) FROM activity_log a WHERE a.tenant_id=t.id AND a.action<>'Accesso' AND a.at > NOW() - INTERVAL '30 days') AS acts30
+     FROM tenants t WHERE t.status<>'pending' ORDER BY lower(t.ragione_sociale)`);
+  return {
+    more: rows.length > 1000,
+    rows: rows.slice(0, 1000).map((r) => ({ id: Number(r.id), at: r.at, userId: r.user_id, user: r.user_label, tenantId: r.tenant_id, tenant: r.tenant || "", action: r.action, detail: r.detail, device: r.device })),
+    summary: summary.map((r) => ({ id: r.id, tenant: r.tenant, lastAccess: r.last_access, lastUser: r.last_user || "", access30: Number(r.access30), acts30: Number(r.acts30) })),
+  };
 }
 
 /** Limite ricette del piano (per i clienti; il super admin lo può superare). */
@@ -878,6 +993,7 @@ async function mergeInto(c: Queryable, tid: string, d: any) {
    Area super amministratore
    ===================================================================== */
 async function admin(m: string, path: string, b: any, url: URL): Promise<Response> {
+  if (path === "/activity" && m === "GET") return json(await activity(url));
   const parts = path.split("/").filter(Boolean);
 
   if (path === "/tenants" && m === "GET") {

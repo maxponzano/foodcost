@@ -123,6 +123,14 @@ input:disabled,select:disabled,textarea:disabled{opacity:1;color:var(--ink);back
 #toast{position:fixed;left:50%;bottom:74px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:20;max-width:90%;display:none}
 .adm .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .adm .row>*{flex:1;min-width:130px}
+.act-sum{padding:6px 14px}.asr{display:grid;grid-template-columns:2fr 2fr 1fr 1fr;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px;align-items:center;cursor:pointer}
+.asr span:nth-child(n+3){text-align:right}.asr em{display:block;font-style:normal;color:var(--mut);font-size:12px}.asr.ash{cursor:default;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.asr.on{color:var(--acc)}.asr:not(.ash):hover{background:var(--chip)}.asr:last-child{border-bottom:0}
+.act-f{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.act-f label{margin:0}
+.act-l{padding:4px 14px}.ald{font-weight:700;color:var(--brand);font-size:13px;text-transform:capitalize;padding:12px 0 4px;border-bottom:2px solid var(--line)}
+.alr{display:grid;grid-template-columns:52px 1.3fr 3fr 70px;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px;align-items:baseline}
+.alr .alt{font-variant-numeric:tabular-nums;color:var(--mut)}.alr em{display:block;font-style:normal;color:var(--mut);font-size:12px}.alr.acc .ala{color:var(--ok)}.ald2{font-size:12px;text-align:right}
+@media (max-width:700px){.act-f{grid-template-columns:1fr 1fr}.alr{grid-template-columns:44px 1fr}.alr .ala{grid-column:2}.alr .ald2{display:none}.asr{grid-template-columns:1.4fr 1.6fr .6fr .6fr;font-size:13px}}
 .perms{flex-basis:100%;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;font-size:13px;padding:2px 0 4px}.perms .chk{margin:0;font-size:13px}
 .adm-row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.adm-row .sm{margin-left:6px}
 .adm-add{margin-top:10px}
@@ -358,6 +366,7 @@ details.tc summary::-webkit-details-marker{display:none}
   <button data-tab="menu">Menù Ingegnerizzato</button>
   <button data-tab="dati">Dati</button>
   <button data-tab="clienti" id="nav-clienti" hidden>Clienti</button>
+  <button data-tab="attivita" id="nav-attivita" hidden>Attività</button>
 </div></nav>
 <main id="app"></main>
 <div id="sheet"></div>
@@ -518,11 +527,12 @@ function render(){
   if(!ME){renderAuth();return}
   renderTop();
   document.querySelectorAll('nav button').forEach(function(b){b.classList.toggle('on',b.dataset.tab===route.tab)});
-  var nc=document.getElementById('nav-clienti');nc.hidden=!isSuper();
+  var nc=document.getElementById('nav-clienti');nc.hidden=!isSuper();document.getElementById('nav-attivita').hidden=!isSuper();
   if(isSuper()){var pend=ME.tenants.filter(function(t){return t.status==='pending'}).length;nc.textContent='Clienti'+(pend?' ('+pend+')':'')}
   subt();
   var app=document.getElementById('app');
   if(route.tab==='clienti'&&isSuper())app.innerHTML=adminHTML();
+  else if(route.tab==='attivita'&&isSuper())app.innerHTML=actHTML();
   else if(!S)app.innerHTML=isSuper()?'<div class="empty">Scegli un cliente dal selettore in alto<br>oppure dalla sezione Clienti.</div>':'<div class="empty">Nessuna attività assegnata al tuo account.<br>Contatta l\'amministratore.</div>';
   else if(route.recipe)app.innerHTML=recipeEditorHTML();
   else if(route.tab==='riepilogo')app.innerHTML=riepHTML();
@@ -533,7 +543,7 @@ function render(){
   else if(route.tab==='menu')app.innerHTML=menuHTML();
   else app.innerHTML=datiHTML();
   document.getElementById('sheet').innerHTML=route.pw?pwSheetHTML():(route.imp&&S?impSheetHTML():route.sreset&&S?sresetSheetHTML():route.bulk&&S?bulkSheetHTML():(route.food&&S?foodSheetHTML():''));
-  if(!S||route.tab==='clienti'){}
+  if(!S||route.tab==='clienti'||route.tab==='attivita'){}
   else if(route.recipe)recalc();
   else if(route.tab==='marginalita')paintMarg();
   else if(route.tab==='menu')paintMenu();
@@ -544,7 +554,7 @@ function render(){
 /* sola lettura: nasconde i pulsanti di modifica e blocca i campi (il server rifiuta comunque ogni scrittura) */
 var WRITE=['sreset','pconfirm','checkdone','bulkmode','newfood','savefood','delfood','addprice','delprice','newrecipe','saverecipe','dupl','delrecipe','addrow','delrow','addlist','dellist'];
 function applyRO(){
-  if(!S||route.tab==='clienti')return;
+  if(!S||route.tab==='clienti'||route.tab==='attivita')return;
   var ids=['app'].concat(route.food&&!route.pw?['sheet']:[]),keep=[];
   if(!RO){
     // diritti della persona: senza "modificare" alimenti, ricette e prezzi si vedono ma non si cambiano (tranne ciò che sta creando)
@@ -758,10 +768,10 @@ function recalc(){
 }
 
 /* ---------- MARGINALITÀ ---------- */
-var SUBS={vendite:'Vendite per mese o per settimana',riepilogo:'Riepilogo del locale',alimenti:'Anagrafica alimenti e prezzi',ricette:'Ricettario e food cost',marginalita:'Food cost e margini per piatto',menu:'Menù Ingegnerizzato',dati:'Anagrafica attività e liste',clienti:'Pannello clienti'};
+var SUBS={vendite:'Vendite per mese o per settimana',riepilogo:'Riepilogo del locale',alimenti:'Anagrafica alimenti e prezzi',ricette:'Ricettario e food cost',marginalita:'Food cost e margini per piatto',menu:'Menù Ingegnerizzato',dati:'Anagrafica attività e liste',clienti:'Pannello clienti',attivita:'Registro attività dei clienti'};
 function subt(){
   var e0=document.getElementById('sub');
-  if(route.tab==='clienti'||!S){if(e0)e0.textContent=route.tab==='clienti'?SUBS.clienti:'';return}
+  if(route.tab==='clienti'||route.tab==='attivita'||!S){if(e0)e0.textContent=SUBS[route.tab]&&(route.tab==='clienti'||route.tab==='attivita')?SUBS[route.tab]:'';return}
   var t=S.tenant.ragione?S.tenant.ragione+(S.tenant.tipo?' · '+S.tenant.tipo:''):'';
   var e=document.getElementById('sub');if(e)e.textContent=route.recipe?'Ricetta':(t?t+' — ':'')+SUBS[route.tab];
 }
@@ -1665,6 +1675,44 @@ function download(name,obj){
 }
 function slug(t){return String(t||'cliente').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'cliente'}
 
+/* ---------- REGISTRO ATTIVITÀ (solo super admin) ---------- */
+var ACT=null;   // {f:{tenant,user,from,to}, d:dati, busy}
+function daysAgo(n){var d=new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10)}
+var TZ={timeZone:'Europe/Rome'};
+function atDay(x){return new Date(x).toLocaleDateString('it-IT',Object.assign({weekday:'long',day:'numeric',month:'long',year:'numeric'},TZ))}
+function atTime(x){return new Date(x).toLocaleTimeString('it-IT',Object.assign({hour:'2-digit',minute:'2-digit'},TZ))}
+function atShort(x){return new Date(x).toLocaleDateString('it-IT',Object.assign({day:'2-digit',month:'2-digit',year:'numeric'},TZ))+' '+atTime(x)}
+function actLoad(){
+  if(!ACT)ACT={f:{tenant:'',user:'',from:daysAgo(30),to:today()}};
+  var f=ACT.f,qs=Object.keys(f).filter(function(k){return f[k]}).map(function(k){return k+'='+encodeURIComponent(f[k])}).join('&');
+  ACT.busy=true;
+  return Promise.all([ADM?null:loadAdmin(),api('GET','/admin/activity'+(qs?'?'+qs:''))]).then(function(r){ACT.d=r[1];ACT.busy=false;if(route.tab==='attivita')render()}).catch(function(e){ACT.busy=false;showErr(e)});
+}
+function actSet(k,v){ACT.f[k]=v;if(k==='tenant')ACT.f.user='';actLoad()}
+function actHTML(){
+  if(!ACT||!ACT.d||!ADM){if(!ACT||!ACT.busy)actLoad();return'<div class="empty">Caricamento…</div>'}
+  var d=ACT.d,f=ACT.f,h='<div class="adm">';
+  h+='<h2 class="gh">ULTIMO ACCESSO PER CLIENTE</h2><div class="card act-sum"><div class="asr ash"><span>Cliente</span><span>Ultimo accesso</span><span>Accessi<br>30 gg</span><span>Attività<br>30 gg</span></div>'
+    +d.summary.map(function(t){return'<div class="asr'+(f.tenant===t.id?' on':'')+'" data-act="actten" data-id="'+t.id+'" title="Mostra solo questo cliente"><span><b>'+esc(t.tenant)+'</b></span><span>'+(t.lastAccess?atShort(t.lastAccess)+'<em>'+esc(t.lastUser)+'</em>':'<span class="mut">mai</span>')+'</span><span>'+t.access30+'</span><span>'+t.acts30+'</span></div>'}).join('')+'</div>';
+  var ten=ADM.tenants.filter(function(t){return t.status!=='pending'}),ppl={};
+  ten.forEach(function(t){if(f.tenant&&t.id!==f.tenant)return;t.admins.concat(t.viewers).forEach(function(a){ppl[a.id]=a.name||a.email})});
+  h+='<h2 class="gh">ATTIVITÀ</h2><div class="card act-f">'
+    +'<label>Cliente<select data-keep onchange="actSet(\'tenant\',this.value)"><option value="">Tutti i clienti</option>'+ten.map(function(t){return'<option value="'+t.id+'"'+(f.tenant===t.id?' selected':'')+'>'+esc(t.ragione)+'</option>'}).join('')+'</select></label>'
+    +'<label>Persona<select data-keep onchange="actSet(\'user\',this.value)"><option value="">Tutte le persone</option>'+Object.keys(ppl).sort(function(a,b){return ppl[a].localeCompare(ppl[b])}).map(function(id){return'<option value="'+id+'"'+(f.user===id?' selected':'')+'>'+esc(ppl[id])+'</option>'}).join('')+'</select></label>'
+    +'<label>Dal<input data-keep type="date" value="'+esc(f.from)+'" onchange="actSet(\'from\',this.value)"></label>'
+    +'<label>Al<input data-keep type="date" value="'+esc(f.to)+'" onchange="actSet(\'to\',this.value)"></label></div>';
+  if(!d.rows.length)return h+'<p class="mut">Nessuna attività con questi filtri.</p></div>';
+  var day='';
+  h+='<div class="card act-l">';
+  d.rows.forEach(function(r){
+    var dd=atDay(r.at);if(dd!==day){day=dd;h+='<div class="ald">'+esc(dd)+'</div>'}
+    h+='<div class="alr'+(r.action==='Accesso'?' acc':'')+'"><span class="alt">'+atTime(r.at)+'</span><span class="alw"><b>'+esc(r.user)+'</b>'+(f.tenant?'':'<em>'+esc(r.tenant||'—')+'</em>')+'</span>'
+      +'<span class="ala">'+esc(r.action)+(r.detail?': <b>'+esc(r.detail)+'</b>':'')+'</span><span class="mut ald2">'+esc(r.device)+'</span></div>';
+  });
+  h+='</div>'+(d.more?'<p class="mut">Mostrate le ultime 1000 attività: restringi i filtri per vedere le altre.</p>':'')+'<p class="mut" style="font-size:13px">Si registrano accessi e modifiche di persone autorizzate e visualizzatori (non le tue). Salvataggi ripetuti entro 30 minuti contano come una riga. Il registro si tiene 12 mesi.</p>';
+  return h+'</div>';
+}
+
 /* ---------- PANNELLO CLIENTI (solo super admin) ---------- */
 function loadAdmin(){
   return Promise.all([api('GET','/admin/tenants'),api('GET','/admin/users'),api('GET','/public/tipi')]).then(function(r){
@@ -1805,16 +1853,17 @@ function recipeOut(r){return{checkNote:(r.checkNote||'').trim(),inAvg:r.inAvg!==
 function armed(t,label){if(t.dataset.armed)return true;t.dataset.armed='1';t.textContent=label;return false}
 document.addEventListener('click',function(e){
   var t=e.target.closest('[data-tab],[data-act]');if(!t)return;
-  if(t.dataset.tab){if(typeof flushSales==='function'&&S)flushSales();route.tab=t.dataset.tab;route.recipe=null;route.from=null;route.food=null;route.cat='';route.q='';if(route.tab==='clienti'){ADM&&(ADM.msg='');ADM=null}render();window.scrollTo(0,0);return}
+  if(t.dataset.tab){if(typeof flushSales==='function'&&S)flushSales();route.tab=t.dataset.tab;route.recipe=null;route.from=null;route.food=null;route.cat='';route.q='';if(route.tab==='clienti'){ADM&&(ADM.msg='');ADM=null}if(route.tab==='attivita'&&ACT)ACT.d=null;render();window.scrollTo(0,0);return}
   var a=t.dataset.act,id=t.dataset.id;
   /* clic sullo sfondo scuro di una scheda: chiude solo se non si è cliccato dentro la scheda */
   if(a==='closebg'){if(e.target!==t)return;if(route.pw){if(!route.pw.forced)route.pw=null}else{route.food=null;route.bulk=null;route.sreset=null;route.imp=null}render();return}
   /* accesso e account */
   if(a==='goregister'){route.auth='register';route.authMsg='';renderAuth();return}
   if(a==='gologin'){route.auth='login';route.authMsg='';renderAuth();return}
-  if(a==='logout'){api('POST','/logout',{}).catch(function(){}).then(function(){ME=null;S=null;CUR=null;ADM=null;route.pw=null;route.auth='login';route.authMsg='';render()});return}
+  if(a==='logout'){api('POST','/logout',{}).catch(function(){}).then(function(){ME=null;S=null;CUR=null;ADM=null;ACT=null;route.pw=null;route.auth='login';route.authMsg='';render()});return}
   if(a==='pwopen'){route.pw={forced:false};render();return}
   if(a==='pwclose'){if(route.pw&&!route.pw.forced){route.pw=null;render()}return}
+  if(a==='actten'){actSet('tenant',ACT.f.tenant===id?'':id);return}
   /* pannello clienti */
   if(a==='tapprove'){busy(t,api('PUT','/admin/tenants/'+id,{status:'approved'})).then(function(){ADM.msg='';return admReload()}).catch(showErr);return}
   if(a==='tstatus'){ADM.open=id;busy(t,api('PUT','/admin/tenants/'+id,{status:t.dataset.s})).then(admReload).catch(showErr);return}
