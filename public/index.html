@@ -1725,7 +1725,7 @@ function actHTML(){
     h+='<div class="alr'+(r.action==='Accesso'?' acc':'')+'"><span class="alt">'+atTime(r.at)+'</span><span class="alw"><b>'+esc(r.user)+'</b>'+(f.tenant?'':'<em>'+esc(r.tenant||'—')+'</em>')+'</span>'
       +'<span class="ala">'+esc(r.action)+(r.detail?': <b>'+esc(r.detail)+'</b>':'')+'</span><span class="mut ald2">'+esc(r.device)+(r.place?'<span class="alp">'+esc(r.place)+'</span>':'')+'</span></div>';
   });
-  h+='</div>'+(d.more?'<p class="mut">Mostrate le ultime 1000 attività: restringi i filtri per vedere le altre.</p>':'')+'<p class="mut" style="font-size:13px">Si registrano accessi e modifiche di persone autorizzate e visualizzatori (non le tue). Salvataggi ripetuti entro 30 minuti contano come una riga. La città è approssimativa: la ricava Netlify dalla connessione internet (con il telefono può essere quella dell'operatore). Il registro si tiene 12 mesi.</p>';
+  h+='</div>'+(d.more?'<p class="mut">Mostrate le ultime 1000 attività: restringi i filtri per vedere le altre.</p>':'')+'<p class="mut" style="font-size:13px">Si registrano accessi e modifiche di persone autorizzate e visualizzatori (non le tue). Salvataggi ripetuti entro 30 minuti contano come una riga. La città è approssimativa: la ricava Netlify dalla connessione internet (con il telefono può essere quella dell\'operatore). Il registro si tiene 12 mesi.</p>';
   return h+'</div>';
 }
 
