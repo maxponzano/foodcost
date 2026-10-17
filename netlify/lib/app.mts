@@ -10,7 +10,7 @@ import { DEFAULT_LISTS, demoData } from "./seed.mts";
 /* =====================================================================
    Tipi e utilità
    ===================================================================== */
-type User = { id: string; email: string; role: "super_admin" | "client_admin" | "viewer"; status: string; must_change_pw: boolean; session_ver: number };
+type User = { id: string; email: string; role: "super_admin" | "client_admin" | "viewer"; status: string; must_change_pw: boolean; can_change_pw?: boolean; session_ver: number };
 type Perm = { foods: boolean; recipes: boolean; dup: boolean; edit: boolean; sales: boolean };
 type Scope = { tenant: any; canWrite: boolean; isSuper: boolean; perm: Perm };
 const ALL: Perm = { foods: true, recipes: true, dup: true, edit: true, sales: true };
@@ -198,7 +198,7 @@ async function currentUser(req: Request): Promise<User> {
   const tok = getCookie(req, COOKIE);
   const s = tok ? await readSession(tok) : null;
   if (!s || !UUID_RE.test(s.sub)) throw new HttpError(401, "AUTH", "Accesso richiesto.");
-  const r = await q(`SELECT id,email,role,status,must_change_pw,session_ver FROM users WHERE id=$1`, [s.sub]);
+  const r = await q(`SELECT id,email,role,status,must_change_pw,can_change_pw,session_ver FROM users WHERE id=$1`, [s.sub]);
   const u = r[0] as User | undefined;
   if (!u || u.status !== "active" || u.session_ver !== s.sv) throw new HttpError(401, "AUTH", "Sessione scaduta. Accedi di nuovo.");
   return u;
@@ -293,12 +293,16 @@ async function me(u: User) {
     tenants = tenants.map((t) => ({ ...t, role: t.role === "client_admin" ? "admin" : "viewer" }));
   }
   return {
-    user: { id: u.id, email: u.email, role: u.role, mustChangePw: u.must_change_pw },
+    user: { id: u.id, email: u.email, role: u.role, canChangePw: u.role === "super_admin" || u.can_change_pw !== false,
+      // chi non può cambiarsi la password non viene obbligato a farlo (la gestisce l'amministratore)
+      mustChangePw: u.must_change_pw && (u.role === "super_admin" || u.can_change_pw !== false) },
     tenants: tenants.map((t) => ({ id: t.id, ragione: t.ragione_sociale, tipo: t.tipo_attivita, status: t.status, role: t.role })),
   };
 }
 
 async function changePassword(u: User, b: any) {
+  if (u.role !== "super_admin" && u.can_change_pw === false)
+    throw forbidden("La password di questo account la gestisce l'amministratore.", "PW_LOCKED");
   const row = (await q(`SELECT pw_hash FROM users WHERE id=$1`, [u.id]))[0];
   if (!(await checkPassword(String(b.old || ""), row.pw_hash))) throw bad("La password attuale non è corretta.", "BAD_PASSWORD");
   if (!validPassword(b.new)) throw bad("La nuova password deve avere almeno 10 caratteri.");
@@ -1001,13 +1005,13 @@ async function admin(m: string, path: string, b: any, url: URL): Promise<Respons
       SELECT t.*, (SELECT count(*) FROM recipes r WHERE r.tenant_id=t.id) AS recipe_count,
                   (SELECT count(*) FROM foods f WHERE f.tenant_id=t.id) AS food_count
       FROM tenants t ORDER BY (t.status='pending') DESC, lower(t.ragione_sociale)`);
-    const mem = await q(`SELECT m.*, u.id, u.email, u.full_name, u.status FROM memberships m JOIN users u ON u.id=m.user_id ORDER BY u.email`);
+    const mem = await q(`SELECT m.*, u.id, u.email, u.full_name, u.status, u.can_change_pw FROM memberships m JOIN users u ON u.id=m.user_id ORDER BY u.email`);
     return json({
       tenants: ts.map((t) => ({
         id: t.id, ragione: t.ragione_sociale, tipo: t.tipo_attivita, status: t.status, plan: t.plan,
         maxRecipes: t.max_recipes, canAddFoods: t.can_add_foods, canAddRecipes: t.can_add_recipes, canDupRecipes: t.can_dup_recipes, salesGrain: t.sales_grain === "W" ? "W" : "M",
         recipeCount: Number(t.recipe_count), foodCount: Number(t.food_count), createdAt: t.created_at,
-        admins: mem.filter((x) => x.tenant_id === t.id && x.role === "client_admin").map((x) => ({ id: x.id, email: x.email, name: x.full_name, status: x.status, perm: permOf(x) })),
+        admins: mem.filter((x) => x.tenant_id === t.id && x.role === "client_admin").map((x) => ({ id: x.id, email: x.email, name: x.full_name, status: x.status, perm: { ...permOf(x), pw: x.can_change_pw !== false } })),
         viewers: mem.filter((x) => x.tenant_id === t.id && x.role === "viewer").map((x) => ({ id: x.id, email: x.email, status: x.status })),
       })),
     });
@@ -1060,10 +1064,17 @@ async function admin(m: string, path: string, b: any, url: URL): Promise<Respons
     const sets: string[] = [], vals: unknown[] = [uid, tid];
     for (const k of Object.keys(PERM_COLS) as (keyof Perm)[])
       if (typeof b.perm?.[k] === "boolean") { vals.push(b.perm[k]); sets.push(`${PERM_COLS[k]}=$${vals.length}`); }
-    if (!sets.length) throw bad("Nessun diritto da cambiare.");
-    const r = await q(`UPDATE memberships SET ${sets.join(",")} WHERE user_id=$1 AND tenant_id=$2 AND role='client_admin' RETURNING *`, vals);
+    const pw = typeof b.perm?.pw === "boolean" ? b.perm.pw : null;
+    if (!sets.length && pw === null) throw bad("Nessun diritto da cambiare.");
+    const r = sets.length
+      ? await q(`UPDATE memberships SET ${sets.join(",")} WHERE user_id=$1 AND tenant_id=$2 AND role='client_admin' RETURNING *`, vals)
+      : await q(`SELECT * FROM memberships WHERE user_id=$1 AND tenant_id=$2 AND role='client_admin'`, [uid, tid]);
     if (!r.length) throw notFound("Persona non trovata in questo cliente.");
-    return json({ ok: true, perm: permOf(r[0]) });
+    // la password è dell'account (non del locale): il diritto vale per la persona
+    const u = pw === null
+      ? await q(`SELECT can_change_pw FROM users WHERE id=$1`, [uid])
+      : await q(`UPDATE users SET can_change_pw=$2 WHERE id=$1 AND role='client_admin' RETURNING can_change_pw`, [uid, pw]);
+    return json({ ok: true, perm: { ...permOf(r[0]), pw: u[0]?.can_change_pw !== false } });
   }
 
   if (parts[0] === "tenants" && parts.length === 2) {

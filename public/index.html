@@ -586,7 +586,7 @@ function renderTop(){
   }
   var role=isSuper()?'super_admin':(S?(S.canWrite?'admin':'viewer'):(ME.user.role==='viewer'?'viewer':'admin'));
   h+='<span class="role" title="'+esc(ME.user.email)+'">'+ROLES[role]+'</span>'
-   +'<button class="sm" data-act="pwopen">Password</button><button class="sm" data-act="logout">Esci</button>';
+   +(ME.user.canChangePw===false?'':'<button class="sm" data-act="pwopen">Password</button>')+'<button class="sm" data-act="logout">Esci</button>';
   el.innerHTML=h;
 }
 function can(k){return !!S&&!RO&&(S.isSuper||!!(S.perm&&S.perm[k]))}
@@ -1767,7 +1767,7 @@ function adminHTML(){
   return h+'</div>';
 }
 /* diritti della singola persona autorizzata: si salvano subito al click */
-var PERMS=[['foods','Inserire alimenti'],['recipes','Creare ricette'],['dup','Duplicare ricette'],['edit','Modificare ricette e prezzi'],['sales','Inserire e azzerare vendite']];
+var PERMS=[['foods','Inserire alimenti'],['recipes','Creare ricette'],['dup','Duplicare ricette'],['edit','Modificare ricette e prezzi'],['sales','Inserire e azzerare vendite'],['pw','Cambiare la propria password']];
 function permRow(tid,a){var p=a.perm||{};
   return'<div class="perms"><span class="mut">Può:</span>'+PERMS.map(function(x){return'<label class="chk"><input type="checkbox"'+(p[x[0]]?' checked':'')+' onchange="setPerm(this,\''+tid+'\',\''+a.id+'\',\''+x[0]+'\')"> '+x[1]+'</label>'}).join('')+'</div>'}
 function setPerm(el,tid,uid,k){var o={};o[k]=el.checked;el.disabled=true;
@@ -1877,7 +1877,7 @@ document.addEventListener('click',function(e){
   if(a==='goregister'){route.auth='register';route.authMsg='';renderAuth();return}
   if(a==='gologin'){route.auth='login';route.authMsg='';renderAuth();return}
   if(a==='logout'){api('POST','/logout',{}).catch(function(){}).then(function(){ME=null;S=null;CUR=null;ADM=null;ACT=null;route.pw=null;route.auth='login';route.authMsg='';render()});return}
-  if(a==='pwopen'){route.pw={forced:false};render();return}
+  if(a==='pwopen'){if(ME&&ME.user.canChangePw===false)return;route.pw={forced:false};render();return}
   if(a==='pwclose'){if(route.pw&&!route.pw.forced){route.pw=null;render()}return}
   if(a==='actten'){actSet('tenant',ACT.f.tenant===id?'':id);return}
   /* pannello clienti */

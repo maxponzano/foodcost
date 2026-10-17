@@ -169,7 +169,7 @@ ok(r.status === 200, "oltre il limite A può ancora modificare le ricette esiste
 /* ------------------------------------------------------------------ */
 section("Diritti per persona (test 3)");
 const uB = (await max.get("/admin/tenants")).data.tenants.find((t: any) => t.id === tB.id).admins[0];
-ok(JSON.stringify(uB.perm) === JSON.stringify({ foods: true, recipes: true, dup: false, edit: true, sales: true }), "di default: alimenti, ricette, modifica e vendite sì, duplicare no");
+ok(JSON.stringify(uB.perm) === JSON.stringify({ foods: true, recipes: true, dup: false, edit: true, sales: true, pw: true }), "di default: alimenti, ricette, modifica e vendite sì, duplicare no");
 const setB = (perm: any) => max.patch(`/admin/tenants/${tB.id}/admins/${uB.id}`, { perm });
 r = await B.patch(`/admin/tenants/${tB.id}/admins/${uB.id}`, { perm: { dup: true } });
 ok(r.status === 403, "un cliente non può cambiarsi i diritti da solo");
@@ -194,6 +194,13 @@ ok(r.status === 403 && r.data.error === "SALES_DISABLED", "senza “vendite” n
 r = await B.post("/sales/reset", { scope: "all" });
 ok(r.status === 403 && r.data.error === "SALES_DISABLED", "…né azzeramento");
 ok((await B.get("/data")).status === 200, "B può sempre leggere i dati");
+await setB({ pw: false });
+ok((await B.get("/me")).data.user.canChangePw === false, "senza “cambiare la password” B lo vede nei suoi dati");
+r = await B.post("/password", { old: "x", new: "Nuova-Password-123" });
+ok(r.status === 403 && r.data.error === "PW_LOCKED", "…e il server rifiuta il cambio password");
+ok((await max.get("/admin/tenants")).data.tenants.find((t: any) => t.id === tB.id).admins[0].perm.pw === false, "Max vede il diritto spento nella scheda");
+await setB({ pw: true });
+ok((await B.get("/me")).data.user.canChangePw === true, "riacceso, B può di nuovo cambiarla");
 await setB({ foods: true, recipes: true, edit: true, sales: true });
 r = await B.post("/foods", food("nuovo"));
 ok(r.status === 201, "riabilitato → creazione alimenti di nuovo possibile");
