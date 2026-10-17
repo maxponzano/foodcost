@@ -60,7 +60,16 @@ function needUuid(v: unknown) {
 /* =====================================================================
    Ingresso principale
    ===================================================================== */
-export async function handle(req: Request, ip = ""): Promise<Response> {
+/** Città approssimativa dalla geolocalizzazione di Netlify (dalla connessione, non dal GPS). */
+export function geoText(g: any): string {
+  if (!g || typeof g !== "object") return "";
+  const city = str(g.city, 80), region = str(g.subdivision?.name, 80), cc = str(g.country?.code, 4), cn = str(g.country?.name, 80);
+  const parts = [city, region && region !== city ? region : ""].filter(Boolean);
+  if (cc && cc !== "IT") parts.push(cn || cc);
+  return parts.join(", ").slice(0, 160);
+}
+
+export async function handle(req: Request, ip = "", geo = ""): Promise<Response> {
   try {
     const url = new URL(req.url);
     const path = url.pathname.replace(/^\/api/, "").replace(/\/+$/, "") || "/";
@@ -88,7 +97,7 @@ export async function handle(req: Request, ip = ""): Promise<Response> {
     if (path === "/me" && m === "GET") return json(await me(user));
     if (path === "/password" && m === "POST") {
       const res = await changePassword(user, body);
-      if (user.role !== "super_admin") await logAct(user, null, req, { action: "Password cambiata", detail: "" });
+      if (user.role !== "super_admin") await logAct(user, null, req, { action: "Password cambiata", detail: "" }, geo);
       return res;
     }
 
@@ -102,7 +111,7 @@ export async function handle(req: Request, ip = ""): Promise<Response> {
     // registro attività: solo clienti; la descrizione si prepara prima (per le eliminazioni serve il nome)
     const act = user.role !== "super_admin" ? await describeAct(m, path, body, scope.tenant.id).catch(() => null) : null;
     const res = await tenantRoutes(m, path, body, scope);
-    if (act && res.status < 300) await logAct(user, scope.tenant.id, req, act);
+    if (act && res.status < 300) await logAct(user, scope.tenant.id, req, act, geo);
     return res;
   } catch (e: any) {
     if (e instanceof HttpError) return json({ error: e.code, message: e.message }, e.status);
@@ -170,7 +179,7 @@ async function describeAct(m: string, path: string, b: any, tid: string): Promis
 }
 /** Scrive una riga di registro. Con "key", le ripetizioni entro 30 minuti aggiornano la riga invece di aggiungerne
  *  (le vendite e i prezzi si salvano a ogni tasto); con "once" la ripetizione si ignora (accessi). Mai bloccante. */
-async function logAct(u: User, tid: string | null, req: Request, a: Act) {
+async function logAct(u: User, tid: string | null, req: Request, a: Act, geo = "") {
   try {
     if (a.once) {
       // un nuovo accesso solo se la persona non ha fatto niente su questo locale negli ultimi 30 minuti
@@ -181,13 +190,13 @@ async function logAct(u: User, tid: string | null, req: Request, a: Act) {
         `SELECT id FROM activity_log WHERE user_id=$1 AND tenant_id IS NOT DISTINCT FROM $2 AND ckey=$3 AND at > NOW() - INTERVAL '30 minutes' ORDER BY at DESC LIMIT 1`,
         [u.id, tid, a.key]);
       if (prev.length) {
-        await q(`UPDATE activity_log SET at=NOW(), detail=$2 WHERE id=$1`, [prev[0].id, a.detail]);
+        await q(`UPDATE activity_log SET at=NOW(), detail=$2, place=COALESCE(NULLIF($3,''), place) WHERE id=$1`, [prev[0].id, a.detail, geo]);
         return;
       }
     }
     const label = (await q(`SELECT COALESCE(NULLIF(full_name,''), email) AS l FROM users WHERE id=$1`, [u.id]))[0]?.l || u.email;
-    await q(`INSERT INTO activity_log(user_id,user_label,tenant_id,action,detail,device,ckey) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [u.id, label, tid, a.action, a.detail.slice(0, 300), deviceOf(req), a.key || null]);
+    await q(`INSERT INTO activity_log(user_id,user_label,tenant_id,action,detail,device,ckey,place) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [u.id, label, tid, a.action, a.detail.slice(0, 300), deviceOf(req), a.key || null, geo]);
   } catch (e) { console.error("registro attività", e); }
 }
 
@@ -576,20 +585,21 @@ async function activity(url: URL) {
   if (from && /^\d{4}-\d{2}-\d{2}$/.test(from)) add("a.at >= (?::date)::timestamptz", from);
   if (to && /^\d{4}-\d{2}-\d{2}$/.test(to)) add("a.at < (?::date + 1)::timestamptz", to);
   const rows = await q(
-    `SELECT a.id, a.at, a.user_id, a.user_label, a.tenant_id, t.ragione_sociale AS tenant, a.action, a.detail, a.device
+    `SELECT a.id, a.at, a.user_id, a.user_label, a.tenant_id, t.ragione_sociale AS tenant, a.action, a.detail, a.device, a.place
      FROM activity_log a LEFT JOIN tenants t ON t.id=a.tenant_id
      ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY a.at DESC, a.id DESC LIMIT 1001`, vals);
   const summary = await q(
     `SELECT t.id, t.ragione_sociale AS tenant,
        (SELECT max(at) FROM activity_log a WHERE a.tenant_id=t.id AND a.action='Accesso') AS last_access,
        (SELECT user_label FROM activity_log a WHERE a.tenant_id=t.id AND a.action='Accesso' ORDER BY at DESC LIMIT 1) AS last_user,
+       (SELECT place FROM activity_log a WHERE a.tenant_id=t.id AND a.action='Accesso' ORDER BY at DESC LIMIT 1) AS last_place,
        (SELECT count(*) FROM activity_log a WHERE a.tenant_id=t.id AND a.action='Accesso' AND a.at > NOW() - INTERVAL '30 days') AS access30,
        (SELECT count(*) FROM activity_log a WHERE a.tenant_id=t.id AND a.action<>'Accesso' AND a.at > NOW() - INTERVAL '30 days') AS acts30
      FROM tenants t WHERE t.status<>'pending' ORDER BY lower(t.ragione_sociale)`);
   return {
     more: rows.length > 1000,
-    rows: rows.slice(0, 1000).map((r) => ({ id: Number(r.id), at: r.at, userId: r.user_id, user: r.user_label, tenantId: r.tenant_id, tenant: r.tenant || "", action: r.action, detail: r.detail, device: r.device })),
-    summary: summary.map((r) => ({ id: r.id, tenant: r.tenant, lastAccess: r.last_access, lastUser: r.last_user || "", access30: Number(r.access30), acts30: Number(r.acts30) })),
+    rows: rows.slice(0, 1000).map((r) => ({ id: Number(r.id), at: r.at, userId: r.user_id, user: r.user_label, tenantId: r.tenant_id, tenant: r.tenant || "", action: r.action, detail: r.detail, device: r.device, place: r.place || "" })),
+    summary: summary.map((r) => ({ id: r.id, tenant: r.tenant, lastAccess: r.last_access, lastUser: r.last_user || "", lastPlace: r.last_place || "", access30: Number(r.access30), acts30: Number(r.acts30) })),
   };
 }
 

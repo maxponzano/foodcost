@@ -128,9 +128,9 @@ input:disabled,select:disabled,textarea:disabled{opacity:1;color:var(--ink);back
 .asr.on{color:var(--acc)}.asr:not(.ash):hover{background:var(--chip)}.asr:last-child{border-bottom:0}
 .act-f{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.act-f label{margin:0}
 .act-l{padding:4px 14px}.ald{font-weight:700;color:var(--brand);font-size:13px;text-transform:capitalize;padding:12px 0 4px;border-bottom:2px solid var(--line)}
-.alr{display:grid;grid-template-columns:52px 1.3fr 3fr 70px;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px;align-items:baseline}
-.alr .alt{font-variant-numeric:tabular-nums;color:var(--mut)}.alr em{display:block;font-style:normal;color:var(--mut);font-size:12px}.alr.acc .ala{color:var(--ok)}.ald2{font-size:12px;text-align:right}
-@media (max-width:700px){.act-f{grid-template-columns:1fr 1fr}.alr{grid-template-columns:44px 1fr}.alr .ala{grid-column:2}.alr .ald2{display:none}.asr{grid-template-columns:1.4fr 1.6fr .6fr .6fr;font-size:13px}}
+.alr{display:grid;grid-template-columns:52px 1.3fr 3fr 150px;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px;align-items:baseline}
+.alr .alt{font-variant-numeric:tabular-nums;color:var(--mut)}.alr em{display:block;font-style:normal;color:var(--mut);font-size:12px}.alr.acc .ala{color:var(--ok)}.ald2{font-size:12px;text-align:right}.alp{display:block}
+@media (max-width:700px){.act-f{grid-template-columns:1fr 1fr}.alr{grid-template-columns:44px 1fr}.alr .ala,.alr .ald2{grid-column:2}.alr .ald2{text-align:left}.alr .alp{display:inline}.alr .alp::before{content:' · '}.asr{grid-template-columns:1.4fr 1.6fr .6fr .6fr;font-size:13px}}
 .perms{flex-basis:100%;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;font-size:13px;padding:2px 0 4px}.perms .chk{margin:0;font-size:13px}
 .adm-row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.adm-row .sm{margin-left:6px}
 .adm-add{margin-top:10px}
@@ -1709,7 +1709,7 @@ function actHTML(){
   if(!ACT||!ACT.d||!ADM){if(!ACT||!ACT.busy)actLoad();return'<div class="empty">Caricamento…</div>'}
   var d=ACT.d,f=ACT.f,h='<div class="adm">';
   h+='<h2 class="gh">ULTIMO ACCESSO PER CLIENTE</h2><div class="card act-sum"><div class="asr ash"><span>Cliente</span><span>Ultimo accesso</span><span>Accessi<br>30 gg</span><span>Attività<br>30 gg</span></div>'
-    +d.summary.map(function(t){return'<div class="asr'+(f.tenant===t.id?' on':'')+'" data-act="actten" data-id="'+t.id+'" title="Mostra solo questo cliente"><span><b>'+esc(t.tenant)+'</b></span><span>'+(t.lastAccess?atShort(t.lastAccess)+'<em>'+esc(t.lastUser)+'</em>':'<span class="mut">mai</span>')+'</span><span>'+t.access30+'</span><span>'+t.acts30+'</span></div>'}).join('')+'</div>';
+    +d.summary.map(function(t){return'<div class="asr'+(f.tenant===t.id?' on':'')+'" data-act="actten" data-id="'+t.id+'" title="Mostra solo questo cliente"><span><b>'+esc(t.tenant)+'</b></span><span>'+(t.lastAccess?atShort(t.lastAccess)+'<em>'+esc(t.lastUser)+(t.lastPlace?' · '+esc(t.lastPlace):'')+'</em>':'<span class="mut">mai</span>')+'</span><span>'+t.access30+'</span><span>'+t.acts30+'</span></div>'}).join('')+'</div>';
   var ten=ADM.tenants.filter(function(t){return t.status!=='pending'}),ppl={};
   ten.forEach(function(t){if(f.tenant&&t.id!==f.tenant)return;t.admins.concat(t.viewers).forEach(function(a){ppl[a.id]=a.name||a.email})});
   h+='<h2 class="gh">ATTIVITÀ</h2><div class="card act-f">'
@@ -1723,9 +1723,9 @@ function actHTML(){
   d.rows.forEach(function(r){
     var dd=atDay(r.at);if(dd!==day){day=dd;h+='<div class="ald">'+esc(dd)+'</div>'}
     h+='<div class="alr'+(r.action==='Accesso'?' acc':'')+'"><span class="alt">'+atTime(r.at)+'</span><span class="alw"><b>'+esc(r.user)+'</b>'+(f.tenant?'':'<em>'+esc(r.tenant||'—')+'</em>')+'</span>'
-      +'<span class="ala">'+esc(r.action)+(r.detail?': <b>'+esc(r.detail)+'</b>':'')+'</span><span class="mut ald2">'+esc(r.device)+'</span></div>';
+      +'<span class="ala">'+esc(r.action)+(r.detail?': <b>'+esc(r.detail)+'</b>':'')+'</span><span class="mut ald2">'+esc(r.device)+(r.place?'<span class="alp">'+esc(r.place)+'</span>':'')+'</span></div>';
   });
-  h+='</div>'+(d.more?'<p class="mut">Mostrate le ultime 1000 attività: restringi i filtri per vedere le altre.</p>':'')+'<p class="mut" style="font-size:13px">Si registrano accessi e modifiche di persone autorizzate e visualizzatori (non le tue). Salvataggi ripetuti entro 30 minuti contano come una riga. Il registro si tiene 12 mesi.</p>';
+  h+='</div>'+(d.more?'<p class="mut">Mostrate le ultime 1000 attività: restringi i filtri per vedere le altre.</p>':'')+'<p class="mut" style="font-size:13px">Si registrano accessi e modifiche di persone autorizzate e visualizzatori (non le tue). Salvataggi ripetuti entro 30 minuti contano come una riga. La città è approssimativa: la ricava Netlify dalla connessione internet (con il telefono può essere quella dell'operatore). Il registro si tiene 12 mesi.</p>';
   return h+'</div>';
 }
 

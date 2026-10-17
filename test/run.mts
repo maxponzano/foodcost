@@ -3,7 +3,7 @@
 import pg from "pg";
 import { readFileSync, readdirSync } from "node:fs";
 import { setPool } from "../netlify/lib/db.mts";
-import { handle } from "../netlify/lib/app.mts";
+import { handle, geoText } from "../netlify/lib/app.mts";
 
 const DB = process.env.TEST_DATABASE_URL;
 if (!DB) { console.error("Imposta TEST_DATABASE_URL"); process.exit(1); }
@@ -27,13 +27,14 @@ function section(s: string) { console.log("\n" + s); }
 class Agent {
   cookie = "";
   ip: string;
+  geo = "";
   constructor(ip = "10.0.0." + Math.floor(Math.random() * 250)) { this.ip = ip; }
   async call(method: string, path: string, body?: unknown, opts: { tenant?: string; headers?: Record<string, string> } = {}) {
     const url = "https://app.test/api" + path + (opts.tenant ? (path.includes("?") ? "&" : "?") + "tenant=" + opts.tenant : "");
     const headers: Record<string, string> = { ...(opts.headers || {}) };
     if (this.cookie) headers.cookie = this.cookie;
     if (body !== undefined) headers["content-type"] = headers["content-type"] || "application/json";
-    const res = await handle(new Request(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) }), this.ip);
+    const res = await handle(new Request(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) }), this.ip, this.geo);
     const sc = res.headers.get("set-cookie");
     if (sc) { const v = sc.split(";")[0]; this.cookie = v.endsWith("=") ? "" : v; }
     const text = await res.text();
@@ -521,6 +522,8 @@ ok(!allBodies.some((b) => b.includes("pw_hash") || b.includes("$2b$") || b.inclu
 
 section("Registro attività dei clienti");
 {
+  ok(geoText({ city: "Genova", subdivision: { name: "Liguria" }, country: { code: "IT", name: "Italy" } }) === "Genova, Liguria" && geoText({ city: "Lugano", subdivision: { name: "Ticino" }, country: { code: "CH", name: "Switzerland" } }) === "Lugano, Ticino, Switzerland" && geoText(undefined) === "", "città dalla geolocalizzazione di Netlify");
+  (A as any).geo = "Genova, Liguria";
   const before = (await max.get("/admin/activity")).data.rows.length;
   await A.get("/data"); await A.get("/data");
   let act = (await max.get("/admin/activity?tenant=" + tA.id)).data;
@@ -542,6 +545,8 @@ section("Registro attività dei clienti");
   const sm = (await max.get("/admin/activity")).data.summary.find((x: any) => x.id === tA.id);
   ok(sm.lastAccess && sm.acts30 >= 3, "riepilogo per cliente: ultimo accesso e attività degli ultimi 30 giorni");
   ok((await A.get("/admin/activity")).status === 403, "un cliente non vede il registro");
+  ok(act.rows.filter((x: any) => x.detail === "RICETTA LOG").every((x: any) => x.place === "Genova, Liguria"), "ogni riga riporta la città");
+  (A as any).geo = "";
   ok((await max.get("/admin/activity")).data.rows.length > before, "il registro cresce");
 }
 
